@@ -1,0 +1,9 @@
+.env
+state/
+*.db
+*.sqlite
+*.sqlite3
+*.token
+*.secret
+*.key
+*.pem
