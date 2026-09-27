@@ -1,24 +1,99 @@
-# LibreNMS -> Keep -> Slack pilot workflow
-#
-# This file is intentionally a safe scaffold.
-# Provider IDs, channel IDs, tokens, webhooks, and API keys must not be committed.
-#
-# Target behavior:
-# - firing event creates one Keep alert
-# - update event with the same fingerprint updates that alert
-# - resolved event with the same fingerprint resolves that alert
-# - Slack receives a compact mobile-friendly notification plus a detailed card
-#
-# Planned visible fields:
-# Device
-# Status
-# IP
-# Fired
-# Resolved
-# Duration
-# Rule
-# Site
-# Summary
-# Event ID
-#
-# Severity is intentionally omitted from the visible Slack card.
+workflow:
+  id: middlebury-librenms-slack
+  name: Middlebury LibreNMS Slack
+  description: Stateful LibreNMS alert lifecycle with clean Slack firing and recovery cards.
+  disabled: false
+
+  triggers:
+    - type: alert
+      filters:
+        - key: source
+          value: librenms
+
+  actions:
+    - name: slack-firing
+      if: "not '{{ alert.slack_timestamp }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-slack-test }}"
+        with:
+          message: "🔴 {{ alert.device }} DOWN\n{{ alert.ip }} • {{ alert.rule }}"
+          enrich_alert:
+            - key: slack_timestamp
+              value: results.slack_timestamp
+          attachments:
+            - color: danger
+              title: "🔴 {{ alert.device }} DOWN"
+              title_link: "{{ alert.url }}"
+              text: "{{ alert.summary }}"
+              fields:
+                - title: Device
+                  value: "{{ alert.device }}"
+                  short: true
+                - title: Status
+                  value: "DOWN"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Fired
+                  value: "{{ alert.fired }}"
+                  short: true
+                - title: Rule
+                  value: "{{ alert.rule }}"
+                  short: true
+                - title: Site
+                  value: "{{ alert.site }}"
+                  short: true
+                - title: Summary
+                  value: "{{ alert.summary }}"
+                  short: false
+                - title: Event ID
+                  value: "{{ alert.event_id }}"
+                  short: false
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-resolved
+      if: "'{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-slack-test }}"
+        with:
+          message: "🟢 {{ alert.device }} recovered\n{{ alert.ip }} • {{ alert.duration }}"
+          attachments:
+            - color: good
+              title: "🟢 {{ alert.device }} recovered"
+              title_link: "{{ alert.url }}"
+              text: "{{ alert.summary }}"
+              fields:
+                - title: Device
+                  value: "{{ alert.device }}"
+                  short: true
+                - title: Status
+                  value: "UP"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
+                  short: true
+                - title: Fired
+                  value: "{{ alert.fired }}"
+                  short: true
+                - title: Resolved
+                  value: "{{ alert.resolved }}"
+                  short: true
+                - title: Rule
+                  value: "{{ alert.rule }}"
+                  short: true
+                - title: Site
+                  value: "{{ alert.site }}"
+                  short: true
+                - title: Summary
+                  value: "{{ alert.summary }}"
+                  short: false
+                - title: Event ID
+                  value: "{{ alert.event_id }}"
+                  short: false
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
