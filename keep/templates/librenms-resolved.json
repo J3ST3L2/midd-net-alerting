@@ -1,0 +1,15 @@
+{
+  "name": "carr hall recovered",
+  "status": "resolved",
+  "source": "librenms",
+  "fingerprint": "librenms:device:example:rule:device-down",
+  "device": "carr hall",
+  "ip": "192.168.31.14",
+  "rule": "Device Down",
+  "site": "Carr Hall",
+  "summary": "Device is back online and responding.",
+  "event_id": "example-event-id",
+  "fired": "2026-09-27 06:45:46",
+  "resolved": "2026-09-27 06:51:05",
+  "duration": "5m 19s"
+}
