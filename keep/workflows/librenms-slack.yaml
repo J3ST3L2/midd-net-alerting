@@ -1,0 +1,24 @@
+# LibreNMS -> Keep -> Slack pilot workflow
+#
+# This file is intentionally a safe scaffold.
+# Provider IDs, channel IDs, tokens, webhooks, and API keys must not be committed.
+#
+# Target behavior:
+# - firing event creates one Keep alert
+# - update event with the same fingerprint updates that alert
+# - resolved event with the same fingerprint resolves that alert
+# - Slack receives a compact mobile-friendly notification plus a detailed card
+#
+# Planned visible fields:
+# Device
+# Status
+# IP
+# Fired
+# Resolved
+# Duration
+# Rule
+# Site
+# Summary
+# Event ID
+#
+# Severity is intentionally omitted from the visible Slack card.
