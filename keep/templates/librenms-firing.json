@@ -1,0 +1,13 @@
+{
+  "name": "carr hall DOWN",
+  "status": "firing",
+  "source": "librenms",
+  "fingerprint": "librenms:device:example:rule:device-down",
+  "device": "carr hall",
+  "ip": "192.168.31.14",
+  "rule": "Device Down",
+  "site": "Carr Hall",
+  "summary": "Device is not responding.",
+  "event_id": "example-event-id",
+  "fired": "2026-09-27 06:45:46"
+}
