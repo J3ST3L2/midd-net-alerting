@@ -1,15 +1,20 @@
-{
-  "name": "carr hall recovered",
-  "status": "resolved",
-  "source": "librenms",
-  "fingerprint": "librenms:device:example:rule:device-down",
-  "device": "carr hall",
-  "ip": "192.168.31.14",
-  "rule": "Device Down",
-  "site": "Carr Hall",
-  "summary": "Device is back online and responding.",
-  "event_id": "example-event-id",
-  "fired": "2026-09-27 06:45:46",
-  "resolved": "2026-09-27 06:51:05",
-  "duration": "5m 19s"
-}
+[
+  {
+    "id": "librenms-test-carr-hall-device-down",
+    "name": "carr hall recovered",
+    "severity": "info",
+    "status": "resolved",
+    "source": ["librenms"],
+    "fingerprint": "librenms:device:carr-hall:rule:device-down",
+    "device": "carr hall",
+    "ip": "192.168.31.14",
+    "rule": "Device Down",
+    "site": "Carr Hall",
+    "summary": "Device is back online and responding.",
+    "event_id": "librenms-test-carr-hall-device-down",
+    "fired": "2026-09-27 06:45:46",
+    "resolved": "2026-09-27 06:51:05",
+    "duration": "5m 19s",
+    "url": "https://raccoon.middlebury.edu/alert-log"
+  }
+]
