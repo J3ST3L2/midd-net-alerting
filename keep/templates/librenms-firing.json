@@ -1,13 +1,18 @@
-{
-  "name": "carr hall DOWN",
-  "status": "firing",
-  "source": "librenms",
-  "fingerprint": "librenms:device:example:rule:device-down",
-  "device": "carr hall",
-  "ip": "192.168.31.14",
-  "rule": "Device Down",
-  "site": "Carr Hall",
-  "summary": "Device is not responding.",
-  "event_id": "example-event-id",
-  "fired": "2026-09-27 06:45:46"
-}
+[
+  {
+    "id": "librenms-test-carr-hall-device-down",
+    "name": "carr hall DOWN",
+    "severity": "critical",
+    "status": "firing",
+    "source": ["librenms"],
+    "fingerprint": "librenms:device:carr-hall:rule:device-down",
+    "device": "carr hall",
+    "ip": "192.168.31.14",
+    "rule": "Device Down",
+    "site": "Carr Hall",
+    "summary": "Device is not responding.",
+    "event_id": "librenms-test-carr-hall-device-down",
+    "fired": "2026-09-27 06:45:46",
+    "url": "https://raccoon.middlebury.edu/alert-log"
+  }
+]
