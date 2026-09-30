@@ -19,9 +19,9 @@ workflow:
         with:
           slack_timestamp: "{{ alert.slack_timestamp }}"
           channel: C0C4MSELS4D
-          message: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
           attachments:
-            - color: good
+            - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
+              color: good
               title: "🟢 {{ alert.device }} RECOVERED"
               title_link: "{{ alert.url }}"
               fields:
@@ -49,12 +49,12 @@ workflow:
         config: "{{ providers.middlebury-slack-test }}"
         with:
           channel: C0C4MSELS4D
-          message: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
           enrich_alert:
             - key: slack_timestamp
               value: results.slack_timestamp
           attachments:
-            - color: danger
+            - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
+              color: danger
               title: "🔴 {{ alert.device }} DOWN"
               title_link: "{{ alert.url }}"
               fields:
