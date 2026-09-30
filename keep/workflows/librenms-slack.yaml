@@ -1,7 +1,7 @@
 workflow:
   id: middlebury-librenms-slack
   name: Middlebury LibreNMS Slack
-  description: Stateful LibreNMS alert lifecycle with clean Slack firing and recovery cards.
+  description: Stateful LibreNMS alert lifecycle using one concise Slack card that is updated in place on recovery.
   disabled: false
 
   triggers:
@@ -11,13 +11,45 @@ workflow:
           value: librenms
 
   actions:
+    - name: slack-resolved-update
+      if: "'{{ alert.slack_timestamp }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-slack-test }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp }}"
+          channel: C0C4MSELS4D
+          message: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
+          attachments:
+            - color: good
+              title: "🟢 {{ alert.device }} RECOVERED"
+              title_link: "{{ alert.url }}"
+              fields:
+                - title: Issue
+                  value: "{{ alert.rule }}"
+                  short: false
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.resolved }}"
+                  short: true
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
     - name: slack-firing
       if: "not '{{ alert.slack_timestamp }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-slack-test }}"
         with:
-          message: "🔴 {{ alert.device }} DOWN\n{{ alert.ip }} • {{ alert.rule }}"
+          channel: C0C4MSELS4D
+          message: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
           enrich_alert:
             - key: slack_timestamp
               value: results.slack_timestamp
@@ -25,75 +57,14 @@ workflow:
             - color: danger
               title: "🔴 {{ alert.device }} DOWN"
               title_link: "{{ alert.url }}"
-              text: "{{ alert.summary }}"
               fields:
-                - title: Device
-                  value: "{{ alert.device }}"
-                  short: true
-                - title: Status
-                  value: "DOWN"
-                  short: true
+                - title: Issue
+                  value: "{{ alert.rule }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
-                - title: Fired
+                - title: Started
                   value: "{{ alert.fired }}"
                   short: true
-                - title: Rule
-                  value: "{{ alert.rule }}"
-                  short: true
-                - title: Site
-                  value: "{{ alert.site }}"
-                  short: true
-                - title: Summary
-                  value: "{{ alert.summary }}"
-                  short: false
-                - title: Event ID
-                  value: "{{ alert.event_id }}"
-                  short: false
-              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
-
-    - name: slack-resolved
-      if: "'{{ alert.status }}' == 'resolved'"
-      provider:
-        type: slack
-        config: "{{ providers.middlebury-slack-test }}"
-        with:
-          message: "🟢 {{ alert.device }} recovered\n{{ alert.ip }} • {{ alert.duration }}"
-          attachments:
-            - color: good
-              title: "🟢 {{ alert.device }} recovered"
-              title_link: "{{ alert.url }}"
-              text: "{{ alert.summary }}"
-              fields:
-                - title: Device
-                  value: "{{ alert.device }}"
-                  short: true
-                - title: Status
-                  value: "UP"
-                  short: true
-                - title: IP
-                  value: "{{ alert.ip }}"
-                  short: true
-                - title: Duration
-                  value: "{{ alert.duration }}"
-                  short: true
-                - title: Fired
-                  value: "{{ alert.fired }}"
-                  short: true
-                - title: Resolved
-                  value: "{{ alert.resolved }}"
-                  short: true
-                - title: Rule
-                  value: "{{ alert.rule }}"
-                  short: true
-                - title: Site
-                  value: "{{ alert.site }}"
-                  short: true
-                - title: Summary
-                  value: "{{ alert.summary }}"
-                  short: false
-                - title: Event ID
-                  value: "{{ alert.event_id }}"
-                  short: false
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
