@@ -1,7 +1,7 @@
 workflow:
   id: middlebury-librenms-slack
   name: Middlebury LibreNMS Slack
-  description: Stateful LibreNMS alert lifecycle fanned out to multiple Slack channels with per-channel message updates.
+  description: Stateful LibreNMS lifecycle delivery through NMS-Alert-Bot to both network alert channels.
   disabled: false
 
   triggers:
@@ -21,7 +21,7 @@ workflow:
           channel: C0C4MSELS4D
           attachments:
             - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
-              color: good
+              color: "#39ff14"
               title: "🟢 {{ alert.device }} RECOVERED"
               title_link: "{{ alert.url }}"
               fields:
@@ -52,7 +52,7 @@ workflow:
           channel: C0AHUT40W0Z
           attachments:
             - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
-              color: good
+              color: "#39ff14"
               title: "🟢 {{ alert.device }} RECOVERED"
               title_link: "{{ alert.url }}"
               fields:
@@ -85,7 +85,7 @@ workflow:
               value: results.slack_timestamp
           attachments:
             - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
-              color: danger
+              color: "#ff3131"
               title: "🔴 {{ alert.device }} DOWN"
               title_link: "{{ alert.url }}"
               fields:
@@ -112,7 +112,7 @@ workflow:
               value: results.slack_timestamp
           attachments:
             - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
-              color: danger
+              color: "#ff3131"
               title: "🔴 {{ alert.device }} DOWN"
               title_link: "{{ alert.url }}"
               fields:

@@ -1,0 +1,31 @@
+@php
+    $firingLog = \App\Models\AlertLog::find($alert->id);
+    $deviceName = $alert->display ?: ($alert->sysName ?: $alert->hostname);
+    $ruleName = $alert->name ?: $alert->title;
+    $firedAt = $firingLog?->time_logged?->format('Y-m-d H:i:s') ?? $alert->timestamp;
+@endphp
+[
+{
+  "id": "librenms-{{ $alert->device_id }}-{{ $alert->rule_id }}",
+  "name": {!! json_encode($alert->title) !!},
+  "severity": "{{ $alert->state == 0 ? 'info' : strtolower((string) $alert->severity) }}",
+  "status": "{{ $alert->state == 0 ? 'resolved' : 'firing' }}",
+  "source": ["librenms"],
+  "fingerprint": "librenms:device:{{ $alert->device_id }}:rule:{{ $alert->rule_id }}",
+  "device": {!! json_encode($deviceName) !!},
+  "hostname": {!! json_encode($alert->hostname) !!},
+  "device_id": {{ (int) $alert->device_id }},
+  "rule_id": {{ (int) $alert->rule_id }},
+  "alert_log_id": {{ (int) $alert->id }},
+  "librenms_uid": {!! json_encode((string) $alert->uid) !!},
+  "ip": {!! json_encode($alert->ip) !!},
+  "location": {!! json_encode($alert->location) !!},
+  "rule": {!! json_encode($ruleName) !!},
+  "summary": {!! json_encode($alert->title) !!},
+  "fired": {!! json_encode($firedAt) !!},
+  "resolved": {!! $alert->state == 0 ? json_encode($alert->timestamp) : 'null' !!},
+  "duration": {!! $alert->state == 0 ? json_encode($alert->elapsed) : 'null' !!},
+  "timestamp": {!! json_encode($alert->timestamp) !!},
+  "url": "https://raccoon.middlebury.edu/alert-log"
+}
+]

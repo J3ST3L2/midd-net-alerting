@@ -1,168 +1,150 @@
-# LibreNMS -> Keep -> Slack pilot
+# LibreNMS -> Keep -> Slack
 
-## Objective
-
-Validate a stateful local alert path before expanding to additional sources.
+## Production path
 
 ```text
-LibreNMS -> Keep on Gravitron -> Slack #net-alerts
+LibreNMS alert rule
+  -> Keep Production API transport
+  -> Keep normalized alert
+  -> Middlebury LibreNMS Slack workflow
+  -> NMS-Alert-Bot
+  -> #nms-alerts + #net-alerts
 ```
 
-GitHub is the configuration source of truth. Gravitron pulls this repository and runs the workflow and test artifacts locally. Do not hand-edit the deployed workflow on Gravitron and leave GitHub behind.
+GitHub is the configuration source of truth. Runtime credentials and Keep state remain outside Git.
 
-## Acceptance criteria
+## LibreNMS transport
 
-1. A firing event creates one Keep alert and one Slack message.
-2. A repeated firing event with the same fingerprint updates the Keep alert and does not create another Slack message.
-3. Recovery resolves the same Keep alert.
-4. Recovery updates the original Slack message in place from DOWN to RECOVERED.
-5. The visible Slack card omits severity, duplicate status fields, location, and other low-value metadata.
-6. Mobile notification text is useful without opening Slack.
-7. Opening Slack shows a compact operational card with the issue, IP address, and timing.
-8. GitHub remains the source of truth for the workflow, templates, tests, and documentation.
-
-## Slack provider
-
-Create a Slack provider in Keep named exactly:
+Transport name:
 
 ```text
-middlebury-slack-test
+Keep Production
 ```
 
-The provider must use a Slack bot/access token, not only an incoming webhook. Keep uses the Slack Web API `chat.update` operation when `slack_timestamp` is supplied, which is required for updating the original alert card on recovery.
-
-The Slack destination is:
+Configuration:
 
 ```text
-#net-alerts
-C0C4MSELS4D
+Type: API
+Default Alert: OFF
+Method: POST
+Send as form: OFF
+URL: https://keep.middlebury.edu/backend/alerts/event
+
+Headers:
+Content-Type=application/json
+X-Service-Name=librenms-production
+
+Body:
+{{ $msg }}
+
+Auth username: blank
+Auth password: blank
 ```
 
-The token remains inside Keep and is never committed to GitHub.
+The LibreNMS transport test button is not the acceptance test for this integration. A real alert template renders JSON; the generic API transport test can send a non-JSON test body, which Keep correctly rejects.
 
-The workflow references the provider by name:
+## LibreNMS template
 
-```yaml
-config: "{{ providers.middlebury-slack-test }}"
-```
-
-## Card design
-
-Severity remains available internally to Keep but is intentionally omitted from the visible Slack card.
-
-Firing card:
+Create an alert template named:
 
 ```text
-🔴 device DOWN
-
-Issue
-Device Down (SNMP unreachable)
-
-IP                         Started
-172.17.15.11               2026-09-29 11:52:47
+Keep Production JSON
 ```
 
-The Issue field spans the full width. IP and Started use Slack short fields so they render as a compact two-column row.
-
-Recovery updates the same Slack message:
+Use the exact contents of:
 
 ```text
-🟢 device RECOVERED
-
-Issue
-Device Down (SNMP unreachable)
-
-IP                         Duration
-172.17.15.11               5m 19s
-
-Started                    Recovered
-2026-09-29 11:52:47        2026-09-29 11:58:06
+librenms/templates/keep-production-json.blade
 ```
 
-There is no separate recovery message.
+Attach that template only to the rule selected for the first production test. Expand to other rules after firing and recovery are verified.
 
-## Mobile notification text
+### Stable lifecycle identity
 
-Firing:
+The Keep fingerprint is deliberately based on the LibreNMS device and rule:
 
 ```text
-🔴 device DOWN • Device Down (SNMP unreachable)
+librenms:device:<device_id>:rule:<rule_id>
 ```
 
-Resolved:
+Do not use `$alert->uid` as the lifecycle fingerprint. LibreNMS uses alert-log event identifiers during alert processing, while device ID and rule ID remain the stable identity of one alert state for a device.
+
+The template also reads the firing alert-log row through `$alert->id`. On recovery LibreNMS maps `$alert->id` back to the original firing alert-log entry, allowing the payload to preserve the original Started timestamp while using the recovery event timestamp for Recovered.
+
+## Keep provider
+
+Slack provider name:
 
 ```text
-🟢 device RECOVERED • Device Down (SNMP unreachable)
+middlebury-nms-alert-bot
 ```
 
-## Stateful behavior
-
-The test firing and recovery payloads use the same fingerprint:
+The provider uses the existing NMS-Alert-Bot access token. The credential is provisioned from the runtime-only directory:
 
 ```text
-librenms:device:carr-hall:rule:device-down
+/opt/stacks/keep/provider-config
 ```
 
-Keep therefore owns one alert lifecycle. The workflow writes the Slack timestamp back onto the Keep alert after the first firing notification. Repeated firing events with the same fingerprint see that field and skip creating another Slack message.
+The token is not stored in GitHub.
 
-When the alert resolves, the workflow passes the stored `slack_timestamp` back to the Slack provider. With a bot/access token provider, Keep updates the original Slack message in place.
+## Slack destinations
 
-## Deploy or test from Gravitron
+```text
+#net-alerts  C0C4MSELS4D
+#nms-alerts  C0AHUT40W0Z
+```
 
-Always start by pulling the source-of-truth repository:
+NMS-Alert-Bot must be a member of both private channels.
+
+## Workflow design
+
+The production workflow is:
+
+```text
+keep/workflows/librenms-slack.yaml
+```
+
+The four explicit Slack actions are intentional. Slack message timestamps are channel-specific, so Keep stores two independent enrichment fields:
+
+```text
+slack_timestamp_net
+slack_timestamp_nms
+```
+
+Each firing action creates one message in its channel and stores that channel's timestamp. Each recovery action updates the matching message in place.
+
+Visible Slack cards intentionally omit internal severity and other low-value metadata. The attachment bars use explicit neon colors:
+
+```text
+Firing:   #ff3131
+Resolved: #39ff14
+```
+
+## Acceptance test
+
+For one real LibreNMS rule:
+
+1. Attach `Keep Production JSON`.
+2. Deliver through `Keep Production`.
+3. Trigger a real firing condition.
+4. Confirm one NMS-Alert-Bot card appears in each Slack channel.
+5. Allow or force the rule to recover.
+6. Confirm both original cards update in place to RECOVERED.
+7. Confirm Started remains the original firing time and Recovered is the recovery time.
+8. Confirm no duplicate firing or recovery cards are created.
+
+Do not disable the legacy Slack transport or alert broker until this complete lifecycle passes from LibreNMS itself.
+
+## Deployment
+
+On Gravitron:
 
 ```bash
 cd /opt/stacks/keep-config
 git pull --ff-only
-git status -sb
-git log -1 --oneline
+
+cd /opt/stacks/keep
+sudo docker compose up -d --force-recreate keep-backend
 ```
 
-Then make the lifecycle test executable:
-
-```bash
-chmod +x keep/tests/test-librenms-lifecycle.sh
-```
-
-Create a dedicated Keep webhook-role API key in Keep. Do not put it in a file in this repository.
-
-Load it only into the shell:
-
-```bash
-read -s -p "Keep API key: " KEEP_API_KEY
-echo
-export KEEP_API_KEY
-```
-
-Then run:
-
-```bash
-./keep/tests/test-librenms-lifecycle.sh
-unset KEEP_API_KEY
-```
-
-Expected Slack behavior:
-
-```text
-one red DOWN card
-(no duplicate card from repeated firing)
-same card updates to green RECOVERED
-```
-
-Expected Keep behavior:
-
-```text
-one fingerprint
-firing -> update -> resolved
-```
-
-## Secrets
-
-Do not commit:
-
-- Keep API keys
-- Slack bot tokens
-- Slack webhook URLs
-- .env files
-- Keep SQLite state
-- TLS private keys
+Keep should log successful provisioning of both the NMS bot provider and `librenms-slack.yaml`.
