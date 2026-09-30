@@ -1,0 +1,6 @@
+services:
+  keep-backend:
+    environment:
+      KEEP_WORKFLOWS_DIRECTORY: /config/workflows
+    volumes:
+      - /opt/stacks/keep-config/keep/workflows:/config/workflows:ro
