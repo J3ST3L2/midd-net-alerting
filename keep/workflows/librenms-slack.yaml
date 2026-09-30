@@ -15,7 +15,7 @@ workflow:
       if: "'{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'resolved'"
       provider:
         type: slack
-        config: "{{ providers.middlebury-slack-test }}"
+        config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           slack_timestamp: "{{ alert.slack_timestamp_net }}"
           channel: C0C4MSELS4D
@@ -46,7 +46,7 @@ workflow:
       if: "'{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'resolved'"
       provider:
         type: slack
-        config: "{{ providers.middlebury-slack-test }}"
+        config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           slack_timestamp: "{{ alert.slack_timestamp_nms }}"
           channel: C0AHUT40W0Z
@@ -77,7 +77,7 @@ workflow:
       if: "not '{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
-        config: "{{ providers.middlebury-slack-test }}"
+        config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           channel: C0C4MSELS4D
           enrich_alert:
@@ -104,7 +104,7 @@ workflow:
       if: "not '{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
-        config: "{{ providers.middlebury-slack-test }}"
+        config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           channel: C0AHUT40W0Z
           enrich_alert:
