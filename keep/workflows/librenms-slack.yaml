@@ -1,7 +1,7 @@
 workflow:
   id: middlebury-librenms-slack
   name: Middlebury LibreNMS Slack
-  description: Stateful LibreNMS alert lifecycle using one concise Slack card that is updated in place on recovery.
+  description: Stateful LibreNMS alert lifecycle fanned out to multiple Slack channels with per-channel message updates.
   disabled: false
 
   triggers:
@@ -11,13 +11,13 @@ workflow:
           value: librenms
 
   actions:
-    - name: slack-resolved-update
-      if: "'{{ alert.slack_timestamp }}' and '{{ alert.status }}' == 'resolved'"
+    - name: slack-resolved-update-net
+      if: "'{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'resolved'"
       provider:
         type: slack
         config: "{{ providers.middlebury-slack-test }}"
         with:
-          slack_timestamp: "{{ alert.slack_timestamp }}"
+          slack_timestamp: "{{ alert.slack_timestamp_net }}"
           channel: C0C4MSELS4D
           attachments:
             - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
@@ -42,15 +42,73 @@ workflow:
                   short: true
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
-    - name: slack-firing
-      if: "not '{{ alert.slack_timestamp }}' and '{{ alert.status }}' == 'firing'"
+    - name: slack-resolved-update-nms
+      if: "'{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-slack-test }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp_nms }}"
+          channel: C0AHUT40W0Z
+          attachments:
+            - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
+              color: good
+              title: "🟢 {{ alert.device }} RECOVERED"
+              title_link: "{{ alert.url }}"
+              fields:
+                - title: Issue
+                  value: "{{ alert.rule }}"
+                  short: false
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.resolved }}"
+                  short: true
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-net
+      if: "not '{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-slack-test }}"
         with:
           channel: C0C4MSELS4D
           enrich_alert:
-            - key: slack_timestamp
+            - key: slack_timestamp_net
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
+              color: danger
+              title: "🔴 {{ alert.device }} DOWN"
+              title_link: "{{ alert.url }}"
+              fields:
+                - title: Issue
+                  value: "{{ alert.rule }}"
+                  short: false
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-nms
+      if: "not '{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-slack-test }}"
+        with:
+          channel: C0AHUT40W0Z
+          enrich_alert:
+            - key: slack_timestamp_nms
               value: results.slack_timestamp
           attachments:
             - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
