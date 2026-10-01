@@ -12,12 +12,12 @@ workflow:
 
   actions:
     - name: slack-resolved-update-net
-      if: "'{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'resolved'"
+      if: "'{{ alert.slack_timestamp_net_v2 }}' and '{{ alert.status }}' == 'resolved'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
-          slack_timestamp: "{{ alert.slack_timestamp_net }}"
+          slack_timestamp: "{{ alert.slack_timestamp_net_v2 }}"
           channel: C0C4MSELS4D
           attachments:
             - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
@@ -44,12 +44,12 @@ workflow:
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-resolved-update-nms
-      if: "'{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'resolved'"
+      if: "'{{ alert.slack_timestamp_nms_v2 }}' and '{{ alert.status }}' == 'resolved'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
-          slack_timestamp: "{{ alert.slack_timestamp_nms }}"
+          slack_timestamp: "{{ alert.slack_timestamp_nms_v2 }}"
           channel: C0AHUT40W0Z
           attachments:
             - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
@@ -76,14 +76,14 @@ workflow:
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-net
-      if: "not '{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.slack_timestamp_net_v2 }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           channel: C0C4MSELS4D
           enrich_alert:
-            - key: slack_timestamp_net
+            - key: slack_timestamp_net_v2
               value: results.slack_timestamp
               disposable: true
           attachments:
@@ -105,14 +105,14 @@ workflow:
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-nms
-      if: "not '{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.slack_timestamp_nms_v2 }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
           channel: C0AHUT40W0Z
           enrich_alert:
-            - key: slack_timestamp_nms
+            - key: slack_timestamp_nms_v2
               value: results.slack_timestamp
               disposable: true
           attachments:
