@@ -19,6 +19,9 @@ workflow:
         with:
           slack_timestamp: "{{ alert.slack_timestamp_net_v2 }}"
           channel: C0C4MSELS4D
+          enrich_alert:
+            - key: slack_timestamp_net_v2
+              value: ""
           attachments:
             - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
               color: "#39ff14"
@@ -51,6 +54,9 @@ workflow:
         with:
           slack_timestamp: "{{ alert.slack_timestamp_nms_v2 }}"
           channel: C0AHUT40W0Z
+          enrich_alert:
+            - key: slack_timestamp_nms_v2
+              value: ""
           attachments:
             - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
               color: "#39ff14"
@@ -85,7 +91,6 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_net_v2
               value: results.slack_timestamp
-              disposable: true
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
@@ -114,7 +119,6 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_nms_v2
               value: results.slack_timestamp
-              disposable: true
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
