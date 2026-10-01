@@ -20,10 +20,11 @@ workflow:
           slack_timestamp: "{{ alert.slack_timestamp_net }}"
           channel: C0C4MSELS4D
           attachments:
-            - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
               color: "#39ff14"
-              title: "🟢 {{ alert.device }} RECOVERED"
-              title_link: "{{ alert.url }}"
+              author_name: "{{ alert.device }} RECOVERED"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
@@ -51,10 +52,11 @@ workflow:
           slack_timestamp: "{{ alert.slack_timestamp_nms }}"
           channel: C0AHUT40W0Z
           attachments:
-            - fallback: "🟢 {{ alert.device }} RECOVERED • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
               color: "#39ff14"
-              title: "🟢 {{ alert.device }} RECOVERED"
-              title_link: "{{ alert.url }}"
+              author_name: "{{ alert.device }} RECOVERED"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
@@ -84,10 +86,11 @@ workflow:
             - key: slack_timestamp_net
               value: results.slack_timestamp
           attachments:
-            - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
-              title: "🔴 {{ alert.device }} DOWN"
-              title_link: "{{ alert.url }}"
+              author_name: "{{ alert.device }} DOWN"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
@@ -111,10 +114,11 @@ workflow:
             - key: slack_timestamp_nms
               value: results.slack_timestamp
           attachments:
-            - fallback: "🔴 {{ alert.device }} DOWN • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
-              title: "🔴 {{ alert.device }} DOWN"
-              title_link: "{{ alert.url }}"
+              author_name: "{{ alert.device }} DOWN"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
