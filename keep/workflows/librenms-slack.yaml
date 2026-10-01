@@ -76,7 +76,7 @@ workflow:
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-net
-      if: "not '{{ alert.slack_timestamp_net }}' or '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.slack_timestamp_net }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -85,6 +85,7 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_net
               value: results.slack_timestamp
+              disposable: true
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
@@ -104,7 +105,7 @@ workflow:
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-nms
-      if: "not '{{ alert.slack_timestamp_nms }}' or '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.slack_timestamp_nms }}' and '{{ alert.status }}' == 'firing'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -113,6 +114,7 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_nms
               value: results.slack_timestamp
+              disposable: true
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
