@@ -1,13 +1,15 @@
 @php
-    $firingLog = \App\Models\AlertLog::find($alert->id);
+    $device = \App\Models\Device::find($alert->device_id);
     $deviceName = $alert->display ?: ($alert->sysName ?: $alert->hostname);
-    $ruleName = $alert->name ?: $alert->title;
-    $firedAt = $firingLog?->time_logged?->format('Y-m-d H:i:s') ?? $alert->timestamp;
+    $ruleName = $alert->name ?: $alert->rule;
+    $firedAt = \App\Models\AlertLog::find($alert->id)?->time_logged?->format('Y-m-d H:i:s') ?? $alert->timestamp;
+    $vendorIcon = $device?->logo();
+    $keepName = trim($deviceName . ' - ' . $ruleName);
 @endphp
 [
 {
   "id": "librenms-{{ $alert->device_id }}-{{ $alert->rule_id }}",
-  "name": {!! json_encode($alert->title) !!},
+  "name": {!! json_encode($keepName) !!},
   "severity": "{{ $alert->state == 0 ? 'info' : strtolower((string) $alert->severity) }}",
   "status": "{{ $alert->state == 0 ? 'resolved' : 'firing' }}",
   "source": ["librenms"],
@@ -21,7 +23,8 @@
   "ip": {!! json_encode($alert->ip) !!},
   "location": {!! json_encode($alert->location) !!},
   "rule": {!! json_encode($ruleName) !!},
-  "summary": {!! json_encode($alert->title) !!},
+  "summary": {!! json_encode($ruleName) !!},
+  "vendor_icon": {!! json_encode($vendorIcon) !!},
   "fired": {!! json_encode($firedAt) !!},
   "resolved": {!! $alert->state == 0 ? json_encode($alert->timestamp) : 'null' !!},
   "duration": {!! $alert->state == 0 ? json_encode($alert->elapsed) : 'null' !!},
