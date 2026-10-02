@@ -38,8 +38,10 @@ class FakeMist:
     def list_sites(self):
         return {"s1": "Davis Library"}
 
+    devices = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45", "status": ""}}
+
     def list_devices(self):
-        return {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45"}}
+        return dict(self.devices)
 
 
 class FakeKeep:
@@ -258,12 +260,12 @@ class LifecycleTests(unittest.TestCase):
 
     def test_oneshot_auto_resolves(self):
         p, mist, keep, clock = bootstrapped(auto_resolve_minutes=30)
-        mist.alarms = [alarm("x", "device_restarted", ts=clock.t - 10, aps=[AP1], severity="info")]
+        mist.alarms = [alarm("x", "vc_master_changed", ts=clock.t - 10, switches=[SW1], severity="critical")]
         p.run_cycle()
-        self.assertEqual(statuses(keep), [("device_restarted", "firing")])
+        self.assertEqual(statuses(keep), [("vc_master_changed", "firing")])
         clock.t += 31 * 60
         p.run_cycle()
-        self.assertEqual(statuses(keep)[-1], ("device_restarted", "resolved"))
+        self.assertEqual(statuses(keep)[-1], ("vc_master_changed", "resolved"))
         self.assertEqual(keep.posted[-1]["labels"]["mist_state"], "auto_resolved")
         clock.t += 60
         p.run_cycle()
@@ -328,6 +330,45 @@ class LifecycleTests(unittest.TestCase):
         p.run_cycle()
         self.assertTrue(any(e - s == 60 and s < old_ts < e for s, e in looked_up))
         self.assertEqual(statuses(keep), [("port_flap", "resolved")])
+
+    def _down_with_status(self, status, **cfg):
+        p, mist, keep, clock = bootstrapped(device_refresh_s=60, self_correct_s=60, **cfg)
+        mist.devices = {AP1: {"ip": "10.0.0.1", "name": "AP-ONE", "model": "AP45", "status": status}}
+        mist.alarms = [alarm("d1", "device_down", ts=clock.t - 30, aps=[AP1])]
+        return p, mist, keep, clock
+
+    def test_self_correct_resolves_when_mist_says_connected(self):
+        p, mist, keep, clock = self._down_with_status("connected")
+        p.run_cycle()                                 # fires; first connected observation recorded
+        self.assertEqual(statuses(keep), [("device_down", "firing")])
+        for _ in range(3):
+            clock.t += 60
+            p.run_cycle()
+        self.assertEqual(statuses(keep), [("device_down", "firing"), ("device_down", "resolved")])
+        self.assertEqual(keep.posted[1]["labels"]["mist_state"], "auto_corrected")
+        self.assertEqual(keep.posted[0]["fingerprint"], keep.posted[1]["fingerprint"])
+
+    def test_self_correct_leaves_disconnected_devices_alone(self):
+        p, mist, keep, clock = self._down_with_status("disconnected")
+        for _ in range(5):
+            p.run_cycle()
+            clock.t += 60
+        self.assertEqual(statuses(keep), [("device_down", "firing")])
+
+    def test_self_correct_ignores_cache_older_than_alert(self):
+        p, mist, keep, clock = self._down_with_status("connected", )
+        p.cfg = dataclasses.replace(p.cfg, device_refresh_s=100000)   # cache stays from before the alarm
+        for _ in range(5):
+            p.run_cycle()
+            clock.t += 60
+        self.assertEqual(statuses(keep), [("device_down", "firing")])
+
+    def test_info_oneshot_events_are_not_posted(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.alarms = [alarm("r", "device_restarted", ts=clock.t - 10, aps=[AP1], severity="info"),
+                       alarm("s", "switch_restarted", ts=clock.t - 10, switches=[SW1], severity="info")]
+        p.run_cycle()
+        self.assertEqual(keep.posted, [])
 
     def test_dry_run_posts_nothing(self):
         cfg = dataclasses.replace(Config(), dry_run=True, org_id="o", mist_token="t")

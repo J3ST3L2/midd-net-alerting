@@ -1,6 +1,7 @@
 """Poll cycle: fetch -> normalize -> dedupe/lifecycle -> outbox -> Keep."""
 import json
 import logging
+import re
 import time
 
 from .keep import KeepError
@@ -9,6 +10,7 @@ from .normalize import extract, resolved_payload
 
 log = logging.getLogger("mist_poller")
 SITES_REFRESH_S = 6 * 3600
+_DEVICE_STATE_FP = re.compile(r"^mist:alarms:(?:device|switch|gateway)_state:([0-9a-f]{12})$")
 
 
 class Poller:
@@ -53,6 +55,7 @@ class Poller:
         with st.transaction():
             self._apply(events, now, silent=bootstrapping, stats=stats)
             self._auto_resolve(now, stats)
+            self._self_correct(now, stats)
             st.set("last_success", now)
             if wide:
                 st.set("last_reconcile", now)
@@ -138,6 +141,35 @@ class Poller:
             firing = json.loads(row["payload"])
             self.state.upsert_alert(row["fingerprint"], "resolved", now, row["alarm_id"], row["alarm_ts"], None, firing, now)
             self._enqueue(row["fingerprint"], resolved_payload(firing, now, "auto_resolved"), now, stats)
+
+    def _self_correct(self, now, stats):
+        """Backstop for a missed recovery alarm: resolve a firing device-down alert when Mist's
+        own device status says the device is connected, on two refreshes at least
+        self_correct_s apart, both newer than the alert. A stale cache can never cancel an outage."""
+        st = self.state
+        if not self.devices:
+            return
+        for row in st.alerts_with_status("firing"):
+            m = _DEVICE_STATE_FP.match(row["fingerprint"])
+            if not m:
+                continue
+            key = "sc:" + row["fingerprint"]
+            info = self.devices.get(m.group(1))
+            if not info or info["status"] != "connected" or self.devices_at <= row["last_ts"]:
+                st.delete(key)
+                continue
+            first = st.get(key)
+            if first is None:
+                st.set(key, self.devices_at)
+                continue
+            if self.devices_at - int(first) < self.cfg.self_correct_s:
+                continue
+            firing = json.loads(row["payload"])
+            st.upsert_alert(row["fingerprint"], "resolved", now, row["alarm_id"], row["alarm_ts"],
+                            None, firing, now)
+            st.delete(key)
+            self._enqueue(row["fingerprint"], resolved_payload(firing, now, "auto_corrected"), now, stats)
+            log.info("self-corrected %s: Mist reports the device connected", row["fingerprint"])
 
     def _enqueue(self, fingerprint, payload, now, stats):
         self.state.enqueue(fingerprint, payload, now)

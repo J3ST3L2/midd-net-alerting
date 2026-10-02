@@ -18,7 +18,9 @@ Runtime layout (nothing here is in Git):
 | Aggregated alarm (`aps`/`switches`/`hostnames` arrays, `count` > 1) | one Keep alert per device |
 | Down/up pairs (`device_down`/`device_reconnected`, `switch_*`, `gateway_*`, `sw_*_clear`, `*_down`/`*_up`, ...; table in `normalize.py`) | pair on `mist:alarms:<canonical>:<mac>`; `device_state` is unchanged from before |
 | Marvis alarms with `status` open/resolved | `mist:alarm:<alarm_id>:<device>` (device from `impacted_entities`), resolved when Mist says so |
-| Events with no recovery signal (restarts, `vc_*`, `rogue_ap`, ...) | posted, then auto-resolved after `AUTO_RESOLVE_MINUTES` |
+| Events with no recovery signal (`vc_*`, `rogue_ap`, ...) | posted, then auto-resolved after `AUTO_RESOLVE_MINUTES` |
+| Info-severity events with no recovery signal (AP/switch restarts) | not posted (`SUPPRESS_INFO_EVENTS`) |
+| Device-down alert still firing while Mist reports the device `connected` | self-corrected: resolved after two device-list refreshes `SELF_CORRECT_S` apart |
 | `infra_arp_*`, `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`) |
 
 Severity: `critical`->critical, `warn`->warning, `info`->low.
