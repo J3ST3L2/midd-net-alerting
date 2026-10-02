@@ -1,0 +1,31 @@
+services:
+  mist-poller:
+    build: ../../mist-poller
+    image: midd-mist-poller:local
+    container_name: mist-poller
+    restart: unless-stopped
+
+    # Same pattern as keep-mist-vector: host networking so the poller can reach
+    # Keep on 127.0.0.1:8088. No ports are published and nothing listens.
+    network_mode: host
+
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    env_file:
+      - .env
+    environment:
+      MIST_API_TOKEN_FILE: /run/secrets/mist-api-token
+      KEEP_API_KEY_FILE: /run/secrets/keep-api-key
+      STATE_DIR: /state
+
+    volumes:
+      - /opt/stacks/mist-poller/secrets/mist-api-token:/run/secrets/mist-api-token:ro,Z
+      - /opt/stacks/mist-poller/secrets/keep-api-key:/run/secrets/keep-api-key:ro,Z
+      - /opt/stacks/mist-poller/state/poller:/state:Z
