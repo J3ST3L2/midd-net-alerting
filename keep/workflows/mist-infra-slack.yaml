@@ -1,0 +1,75 @@
+workflow:
+  id: middlebury-mist-infra-slack
+  name: Middlebury Mist Infrastructure Slack
+  description: Non-Wi-Fi Mist alert lifecycle delivery through NMS-Alert-Bot to mist-network-monitoring.
+  disabled: false
+
+  triggers:
+    - type: alert
+      cel: source.contains("mist") && !labels.mist_event_type.matches("(?i).*(ap|wlan|ssid|radio|client|roam|auth|wifi|wireless).*")
+
+  actions:
+    - name: slack-resolved-update-infra
+      if: "'{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
+          channel: C07U6UYANV8
+          enrich_alert:
+            - key: slack_timestamp_mist_infra_v1
+              value: ""
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} RECOVERED • {{ alert.labels.mist_event_type }}"
+              color: "#39ff14"
+              author_name: "{{ alert.labels.mist_device }} RECOVERED"
+              fields:
+                - title: Event
+                  value: "{{ alert.labels.mist_event_type }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Infrastructure • Keep"
+
+    - name: slack-firing-infra
+      if: "not '{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C07U6UYANV8
+          enrich_alert:
+            - key: slack_timestamp_mist_infra_v1
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} DOWN • {{ alert.labels.mist_event_type }}"
+              color: "#ff3131"
+              author_name: "{{ alert.labels.mist_device }} DOWN"
+              fields:
+                - title: Event
+                  value: "{{ alert.labels.mist_event_type }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Infrastructure • Keep"
