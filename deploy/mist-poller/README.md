@@ -67,9 +67,17 @@ Then set `DRY_RUN=false` in `.env` and:
 sudo docker compose up -d --force-recreate
 ```
 
-Dry-run marks alarms as seen, so going live does not replay them; only new events post.
-To rehearse the cold start again, stop the container and delete
-`/opt/stacks/mist-poller/state/poller/`.
+Dry-run records alarms as handled, so going live from the same state would never post the
+alarms that were open during the dry run, and their later recovery would reach Keep with no
+matching firing alert. Reset the state so the cold start posts what is still open, once:
+
+```bash
+cd /opt/stacks/keep-config/deploy/mist-poller
+sudo docker compose down
+sudo rm -rf /opt/stacks/mist-poller/state/poller/*
+sudo sed -i 's/^DRY_RUN=.*/DRY_RUN=false/' .env
+sudo docker compose up -d
+```
 
 ## Health
 
