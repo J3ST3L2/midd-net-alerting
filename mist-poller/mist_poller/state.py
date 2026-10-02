@@ -68,6 +68,9 @@ class State:
         self.db.execute("INSERT INTO poll_state(key,value) VALUES(?,?) "
                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 
+    def delete(self, key):
+        self.db.execute("DELETE FROM poll_state WHERE key=?", (key,))
+
     # dedupe
     def seen(self, alarm_id, device_key, phase):
         return self.db.execute(

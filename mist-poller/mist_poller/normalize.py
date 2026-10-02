@@ -162,6 +162,8 @@ def extract(alarm, cfg, sites, devices=None):
         ev_ts = last_seen
 
     severity = SEVERITY.get(str(alarm.get("severity", "")).lower(), "warning")
+    if oneshot and severity == "low" and cfg.suppress_info_events:
+        return []      # e.g. AP/switch restarts: informational, nothing to act on
     site_id = alarm.get("site_id") or ""
     cat = category(typ, alarm)
 
