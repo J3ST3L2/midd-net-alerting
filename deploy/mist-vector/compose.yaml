@@ -1,0 +1,27 @@
+services:
+  vector:
+    image: timberio/vector:0.58.0-debian
+    container_name: keep-mist-vector
+    restart: unless-stopped
+    network_mode: host
+
+    environment:
+      VECTOR_LOG: ${VECTOR_LOG:-info}
+
+    volumes:
+      - ./vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - vector-data:/var/lib/vector
+
+    command:
+      - --config
+      - /etc/vector/vector.yaml
+
+    healthcheck:
+      test: ["CMD", "vector", "validate", "/etc/vector/vector.yaml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  vector-data:
