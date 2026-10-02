@@ -17,13 +17,23 @@ Runtime layout (nothing here is in Git):
 | Mist alarm | Keep behavior |
 |---|---|
 | Aggregated alarm (`aps`/`switches`/`hostnames` arrays, `count` > 1) | one Keep alert per device |
-| `device_down` / `device_reconnected` | pair on `mist:alarms:device_state:<mac>` (unchanged scheme) |
-| Marvis alarms with `status` open/resolved | `mist:alarm:<alarm_id>:<device>`, resolved when Mist says so |
+| Down/up pairs (`device_down`/`device_reconnected`, `switch_*`, `gateway_*`, `sw_*_clear`, `*_down`/`*_up`, ...; table in `normalize.py`) | pair on `mist:alarms:<canonical>:<mac>`; `device_state` is unchanged from before |
+| Marvis alarms with `status` open/resolved | `mist:alarm:<alarm_id>:<device>` (device from `impacted_entities`), resolved when Mist says so |
 | Events with no recovery signal (restarts, `vc_*`, `rogue_ap`, ...) | posted, then auto-resolved after `AUTO_RESOLVE_MINUTES` |
-| `infra_arp_failure` / `infra_arp_success` | suppressed (`SUPPRESS_TYPES`) |
+| `infra_arp_*`, `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`) |
 
 Severity: `critical`->critical, `warn`->warning, `info`->low.
 Each alert carries `labels.mist_category` (`wifi` or `infra`); the Keep workflows route on it.
+
+## Known limits
+
+- Mist `start`/`end` filter on the alarm's own `timestamp` (verified live). Updates to an older
+  alarm are therefore seen on the 15-minute wide re-query (72 h), not the 60 s poll. Open Marvis
+  alarms older than that are looked up individually by timestamp.
+- Alarm device arrays appear capped at 10 entries even when `count` is larger.
+- A device that has been down for longer than the bootstrap window (72 h) when the poller first
+  starts is not known; its later recovery is ignored rather than posted.
+- `aps` and `hostnames` are paired by position only when equal length; otherwise the MAC is the name.
 
 ## Install
 

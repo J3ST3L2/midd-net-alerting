@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     status TEXT NOT NULL,              -- firing | silent | resolved
     last_ts INTEGER NOT NULL,
     alarm_id TEXT NOT NULL,
+    alarm_ts INTEGER NOT NULL,
     auto_resolve_at INTEGER,
     payload TEXT NOT NULL,
     updated_at INTEGER NOT NULL);
@@ -81,16 +82,23 @@ class State:
     def alert(self, fingerprint):
         return self.db.execute("SELECT * FROM alerts WHERE fingerprint=?", (fingerprint,)).fetchone()
 
-    def upsert_alert(self, fingerprint, status, last_ts, alarm_id, auto_resolve_at, payload, now):
+    def upsert_alert(self, fingerprint, status, last_ts, alarm_id, alarm_ts, auto_resolve_at, payload, now):
         self.db.execute(
-            "INSERT INTO alerts VALUES(?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET "
+            "INSERT INTO alerts VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET "
             "status=excluded.status,last_ts=excluded.last_ts,alarm_id=excluded.alarm_id,"
+            "alarm_ts=excluded.alarm_ts,"
             "auto_resolve_at=excluded.auto_resolve_at,payload=excluded.payload,"
             "updated_at=excluded.updated_at",
-            (fingerprint, status, last_ts, alarm_id, auto_resolve_at, json.dumps(payload), now))
+            (fingerprint, status, last_ts, alarm_id, alarm_ts, auto_resolve_at, json.dumps(payload), now))
 
     def alerts_with_status(self, status):
         return self.db.execute("SELECT * FROM alerts WHERE status=?", (status,)).fetchall()
+
+    def stale_tracked(self, before_ts):
+        """Open lifecycle alerts (no auto-resolve) whose alarm predates the wide window."""
+        return self.db.execute(
+            "SELECT * FROM alerts WHERE status='firing' AND auto_resolve_at IS NULL "
+            "AND fingerprint LIKE 'mist:alarm:%' AND alarm_ts<?", (before_ts,)).fetchall()
 
     def due_auto_resolves(self, now):
         return self.db.execute(

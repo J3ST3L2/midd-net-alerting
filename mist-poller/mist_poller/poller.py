@@ -33,6 +33,8 @@ class Poller:
 
         self._refresh_sites(now)
         alarms = self.mist.search_alarms(start, now)   # raises on any failure: cursor stays put
+        if wide and not bootstrapping:
+            alarms = self._with_stale_lookups(alarms, start)
         st.set("last_mist_success", now)
 
         events, bad = [], 0
@@ -59,6 +61,17 @@ class Poller:
                  "bootstrap" if bootstrapping else ("wide" if wide else "overlap"),
                  " dry_run" if self.cfg.dry_run else "")
         self.drain(now)
+
+    def _with_stale_lookups(self, alarms, wide_start):
+        """Mist start/end filter on the alarm's own `timestamp`, so a still-open alarm
+        older than the wide window can only be found by querying around that timestamp."""
+        have = {a.get("id") for a in alarms}
+        for row in self.state.stale_tracked(wide_start)[:25]:
+            for a in self.mist.search_alarms(row["alarm_ts"] - 30, row["alarm_ts"] + 30):
+                if a.get("id") not in have:
+                    have.add(a.get("id"))
+                    alarms.append(a)
+        return alarms
 
     def _refresh_sites(self, now):
         if self.sites and now - self.sites_at < SITES_REFRESH_S:
@@ -88,14 +101,14 @@ class Poller:
                     continue                              # would fire and resolve instantly
                 auto_at = ev.ts + ttl if ev.oneshot else None
                 status = "silent" if silent else "firing"
-                st.upsert_alert(ev.fingerprint, status, ev.ts, ev.alarm_id, auto_at, ev.payload, now)
+                st.upsert_alert(ev.fingerprint, status, ev.ts, ev.alarm_id, ev.alarm_ts, auto_at, ev.payload, now)
                 if not silent:
                     self._enqueue(ev.fingerprint, ev.payload, now, stats)
             else:
                 if not row or row["status"] == "resolved" or ev.ts < row["last_ts"]:
                     continue        # never post a recovery we never posted a firing for
                 firing = json.loads(row["payload"])
-                st.upsert_alert(ev.fingerprint, "resolved", ev.ts, row["alarm_id"], None, firing, now)
+                st.upsert_alert(ev.fingerprint, "resolved", ev.ts, row["alarm_id"], row["alarm_ts"], None, firing, now)
                 if row["status"] == "firing":
                     self._enqueue(ev.fingerprint, resolved_payload(firing, ev.ts), now, stats)
 
@@ -104,13 +117,13 @@ class Poller:
                 if self.cfg.bootstrap_post_open:
                     payload = json.loads(row["payload"])
                     st.upsert_alert(row["fingerprint"], "firing", row["last_ts"], row["alarm_id"],
-                                    row["auto_resolve_at"], payload, now)
+                                    row["alarm_ts"], row["auto_resolve_at"], payload, now)
                     self._enqueue(row["fingerprint"], payload, now, stats)
 
     def _auto_resolve(self, now, stats):
         for row in self.state.due_auto_resolves(now):
             firing = json.loads(row["payload"])
-            self.state.upsert_alert(row["fingerprint"], "resolved", now, row["alarm_id"], None, firing, now)
+            self.state.upsert_alert(row["fingerprint"], "resolved", now, row["alarm_id"], row["alarm_ts"], None, firing, now)
             self._enqueue(row["fingerprint"], resolved_payload(firing, now, "auto_resolved"), now, stats)
 
     def _enqueue(self, fingerprint, payload, now, stats):
