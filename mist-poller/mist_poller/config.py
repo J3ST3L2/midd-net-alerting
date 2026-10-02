@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 def _read_secret(file_var, value_var):
     path = os.environ.get(file_var)
-    if path:
+    if path and os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             return f.read().strip()
     return os.environ.get(value_var, "").strip()

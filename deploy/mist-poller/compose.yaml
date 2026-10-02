@@ -22,10 +22,8 @@ services:
       - .env
     environment:
       MIST_API_TOKEN_FILE: /run/secrets/mist-api-token
-      KEEP_API_KEY_FILE: /run/secrets/keep-api-key
       STATE_DIR: /state
 
     volumes:
       - /opt/stacks/mist-poller/secrets/mist-api-token:/run/secrets/mist-api-token:ro,Z
-      - /opt/stacks/mist-poller/secrets/keep-api-key:/run/secrets/keep-api-key:ro,Z
       - /opt/stacks/mist-poller/state/poller:/state:Z

@@ -30,8 +30,6 @@ def main(argv=None):
     cfg = config.load()
     if not (cfg.org_id and cfg.mist_token):
         sys.exit("MIST_ORG_ID and a Mist token (MIST_API_TOKEN_FILE) are required")
-    if not cfg.dry_run and not cfg.keep_api_key:
-        sys.exit("KEEP_API_KEY_FILE is required when DRY_RUN is false")
 
     poller = Poller(cfg,
                     MistClient(cfg.mist_host, cfg.org_id, cfg.mist_token, cfg.page_limit, cfg.max_pages),
