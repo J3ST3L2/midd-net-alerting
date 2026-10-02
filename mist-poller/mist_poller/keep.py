@@ -20,12 +20,11 @@ class KeepClient:
         self.timeout = timeout
 
     def post(self, payload):
-        req = urllib.request.Request(
-            self.endpoint, method="POST",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json",
-                     "X-API-KEY": self._key,
-                     "X-Service-Name": "mist-poller"})
+        headers = {"Content-Type": "application/json", "X-Service-Name": "mist-poller"}
+        if self._key:   # optional: Keep on Gravitron runs NO_AUTH, so no key is normally needed
+            headers["X-API-KEY"] = self._key
+        req = urllib.request.Request(self.endpoint, method="POST",
+                                     data=json.dumps(payload).encode("utf-8"), headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 r.read()

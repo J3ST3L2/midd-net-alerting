@@ -8,7 +8,6 @@ Runtime layout (nothing here is in Git):
 ```text
 /opt/stacks/keep-config                      Git checkout (this repo)
 /opt/stacks/mist-poller/secrets/mist-api-token   read-only Mist org token
-/opt/stacks/mist-poller/secrets/keep-api-key     Keep API key (X-API-KEY)
 /opt/stacks/mist-poller/state/poller/            SQLite state (cursor, dedupe, outbox)
 ```
 
@@ -37,18 +36,15 @@ Each alert carries `labels.mist_category` (`wifi` or `infra`); the Keep workflow
 
 ## Install
 
-1. Tokens (token file already exists from the discovery step; add the Keep key silently):
-
-```bash
-sudo sh -c 'umask 077; printf "Keep API key: "; read -rs T; echo; printf %s "$T" > /opt/stacks/mist-poller/secrets/keep-api-key'
-```
+1. The Mist token file already exists from the discovery step. Keep on Gravitron runs in
+   `NO_AUTH` mode (same as LibreNMS), so no Keep API key is needed.
 
 2. The container runs as uid 10001, so give it the files and state dir:
 
 ```bash
 sudo install -d -m 700 -o 10001 -g 10001 /opt/stacks/mist-poller/state/poller
-sudo chown 10001:10001 /opt/stacks/mist-poller/secrets/mist-api-token /opt/stacks/mist-poller/secrets/keep-api-key
-sudo chmod 400 /opt/stacks/mist-poller/secrets/mist-api-token /opt/stacks/mist-poller/secrets/keep-api-key
+sudo chown 10001:10001 /opt/stacks/mist-poller/secrets/mist-api-token
+sudo chmod 400 /opt/stacks/mist-poller/secrets/mist-api-token
 ```
 
 3. Config and start (dry-run by default):
