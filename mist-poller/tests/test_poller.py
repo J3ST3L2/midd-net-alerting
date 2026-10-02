@@ -130,6 +130,39 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(len(evs), 1)
         self.assertTrue(evs[0].fingerprint.endswith(":org"))
 
+    def test_switch_and_chassis_pairs_share_fingerprint(self):
+        for fire, rec in (("switch_down", "switch_reconnected"),
+                          ("sw_alarm_chassis_pem", "sw_alarm_chassis_pem_clear"),
+                          ("sw_critical_port_down", "sw_critical_port_up")):
+            f = extract(alarm("a", fire, switches=[SW1]), self.cfg, {})[0]
+            r = extract(alarm("b", rec, switches=[SW1]), self.cfg, {})[0]
+            self.assertEqual(f.fingerprint, r.fingerprint, fire)
+            self.assertEqual((f.phase, r.phase), ("fire", "resolve"))
+            self.assertFalse(f.oneshot)
+
+    def test_unpaired_type_is_oneshot(self):
+        e = extract(alarm("a", "switch_restarted", switches=[SW1]), self.cfg, {})[0]
+        self.assertTrue(e.oneshot)
+
+    def test_marvis_identity_from_impacted_entities(self):
+        a = alarm("m1", "port_flap", status="open", group="marvis", severity="warn",
+                  impacted_entities=[{"entity_mac": "5C:5B:35:AA:00:09", "entity_name": "SW-DAVIS-1",
+                                      "entity_type": "switch"}])
+        e = extract(a, self.cfg, {})[0]
+        self.assertEqual(e.payload["labels"]["mist_device"], "SW-DAVIS-1")
+        self.assertEqual(e.payload["labels"]["mist_mac"], "5c5b35aa0009")
+        self.assertEqual(e.payload["labels"]["mist_category"], "infra")
+
+    def test_security_group_and_prefixes_route(self):
+        wifi = extract(alarm("a", "krack_attack", group="security"), self.cfg, {})[0]
+        infra = extract(alarm("b", "sw_bpdu_error", aps=[AP1]), self.cfg, {})[0]
+        self.assertEqual(wifi.payload["labels"]["mist_category"], "wifi")
+        self.assertEqual(infra.payload["labels"]["mist_category"], "infra")
+
+    def test_normal_severity_maps_low(self):
+        e = extract(alarm("a", "device_down", severity="normal", aps=[AP1]), self.cfg, {})[0]
+        self.assertEqual(e.payload["severity"], "low")
+
 
 class LifecycleTests(unittest.TestCase):
     def test_cold_start_posts_open_state_once_and_not_history(self):
@@ -250,6 +283,28 @@ class LifecycleTests(unittest.TestCase):
         clock.t += 60
         p2.run_cycle()
         self.assertEqual(len(keep.posted), 1)
+
+    def test_stale_open_alarm_found_by_timestamp_lookup(self):
+        p, mist, keep, clock = bootstrapped()
+        old_ts = clock.t - 10 * 86400
+        open_a = alarm("m1", "port_flap", ts=old_ts, status="open", switches=[SW1], severity="warn")
+        mist.alarms = []                          # too old for the wide window
+        p.state.upsert_alert("mist:alarm:m1:" + SW1, "firing", old_ts, "m1", old_ts, None,
+                             extract(open_a, p.cfg, {})[0].payload, clock.t)
+        resolved = dict(open_a, status="resolved", resolved_time=clock.t - 5)
+        looked_up = []
+        orig = mist.search_alarms
+
+        def fake(start, end):
+            looked_up.append((start, end))
+            if end - start == 60:                 # targeted lookup around the old timestamp
+                return [resolved]
+            return orig(start, end)
+        mist.search_alarms = fake
+        clock.t += 1000                           # force a wide reconcile
+        p.run_cycle()
+        self.assertTrue(any(e - s == 60 and s < old_ts < e for s, e in looked_up))
+        self.assertEqual(statuses(keep), [("port_flap", "resolved")])
 
     def test_dry_run_posts_nothing(self):
         cfg = dataclasses.replace(Config(), dry_run=True, org_id="o", mist_token="t")

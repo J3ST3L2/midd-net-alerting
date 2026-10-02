@@ -10,14 +10,61 @@ Findings from live discovery (api.ac2.mist.com):
 import re
 from dataclasses import dataclass
 
-SEVERITY = {"critical": "critical", "warn": "warning", "warning": "warning", "info": "low"}
+SEVERITY = {"critical": "critical", "warn": "warning", "warning": "warning",
+            "info": "low", "normal": "low"}
 
-# type -> (canonical lifecycle name, phase). Keeps the pre-existing Keep
-# fingerprint scheme mist:alarms:device_state:<mac> for these pairs.
+# type -> (canonical lifecycle name, phase). Both halves of a pair map to the same
+# canonical name so firing and recovery share one Keep fingerprint,
+# mist:alarms:<canonical>:<device>. device_state keeps the pre-existing scheme.
+# Pairs come from /const/alarm_defs. A type not listed here is treated as a
+# one-shot event (auto-resolved), never as an unpaired "firing forever" alert.
 PAIRS = {
     "device_down": ("device_state", "fire"),
     "device_reconnected": ("device_state", "resolve"),
+    "switch_down": ("switch_state", "fire"),
+    "switch_reconnected": ("switch_state", "resolve"),
+    "gateway_down": ("gateway_state", "fire"),
+    "gateway_reconnected": ("gateway_state", "resolve"),
 }
+
+
+def _pair(fire, resolve, canon):
+    PAIRS[fire] = (canon, "fire")
+    PAIRS[resolve] = (canon, "resolve")
+
+
+for _b in ("gw_bgp_neighbor", "gw_critical_port", "gw_vpn_path", "ha_control_link",
+           "sw_bgp_neighbor", "sw_critical_port", "sw_ospf_neighbor", "sw_vc_port",
+           "switch_lacp_member", "tunnel", "vpn_peer"):
+    _pair(_b + "_down", _b + "_up", _b)
+for _b in ("fan", "hot", "humidity", "mgmt_link_down", "partition", "pem", "poe", "psu", "warm"):
+    _pair("gw_alarm_chassis_" + _b, "gw_alarm_chassis_%s_clear" % _b, "gw_alarm_chassis_" + _b)
+for _b in ("cpu_board_sensor_failed", "fan", "hot", "humidity", "mgmt_link_down",
+           "partition", "pem", "poe", "psu"):
+    _pair("sw_alarm_chassis_" + _b, "sw_alarm_chassis_%s_clear" % _b, "sw_alarm_chassis_" + _b)
+for _f, _r, _c in (
+    ("sw_ddos_protocol_violation_set", "sw_ddos_protocol_violation_clear", "sw_ddos_protocol_violation"),
+    ("gw_fib_count_threshold_exceeded", "gw_fib_count_returned_to_normal", "gw_fib_count"),
+    ("gw_flow_count_threshold_exceeded", "gw_flow_count_returned_to_normal", "gw_flow_count"),
+    ("esl_hung", "esl_recovered", "esl"),
+    ("tt_monitored_resource_failed", "tt_monitored_resource_recovered", "tt_monitored_resource"),
+    ("tt_tunnels_lost", "tt_tunnels_up", "tt_tunnels"),
+    ("cellular_edge_disconnected_from_ncm", "cellular_edge_connected_to_ncm", "cellular_edge_ncm"),
+    ("cellular_edge_ethernet_wan_disconnected", "cellular_edge_ethernet_wan_connected", "cellular_edge_eth_wan"),
+    ("cellular_edge_ethernet_wan_unplugged", "cellular_edge_ethernet_wan_plugged", "cellular_edge_eth_plug"),
+    ("cellular_edge_modem_wan_disconnected", "cellular_edge_modem_wan_connected", "cellular_edge_modem_wan"),
+    ("mist_edge_disconnected", "mist_edge_connected", "mist_edge_conn"),
+    ("mist_edge_cpu_usage_high", "mist_edge_cpu_usage_normal", "mist_edge_cpu"),
+    ("mist_edge_disk_usage_high", "mist_edge_disk_usage_normal", "mist_edge_disk"),
+    ("mist_edge_memory_usage_high", "mist_edge_memory_usage_normal", "mist_edge_memory"),
+    ("mist_edge_fan_unplugged", "mist_edge_fan_plugged", "mist_edge_fan"),
+    ("mist_edge_psu_unplugged", "mist_edge_psu_plugged", "mist_edge_psu"),
+    ("mist_edge_powerinput_disconnected", "mist_edge_powerinput_connected", "mist_edge_power"),
+    ("infra_arp_failure", "infra_arp_success", "infra_arp"),
+    ("infra_dhcp_failure", "infra_dhcp_success", "infra_dhcp"),
+    ("infra_dns_failure", "infra_dns_success", "infra_dns"),
+):
+    _pair(_f, _r, _c)
 
 # Explicit routing overrides; everything else uses the device kind / keywords.
 WIFI_TYPES = {"rogue_ap"}
@@ -28,6 +75,7 @@ _WIFI_WORDS = re.compile(r"(^|_)(wlan|ssid|radio|client|roam|auth|wifi|wireless)
 @dataclass
 class Event:
     alarm_id: str
+    alarm_ts: int         # the alarm's own timestamp (what Mist start/end filter on)
     device_key: str
     phase: str            # "fire" | "resolve"
     fingerprint: str
@@ -57,6 +105,14 @@ def _devices(alarm):
         return [(m, names[i] if aligned else None, k) for i, (m, k) in enumerate(macs)]
     if names:
         return [(None, n, None) for n in names]
+    ents = [e for e in (alarm.get("impacted_entities") or []) if isinstance(e, dict)]
+    if ents:   # Marvis alarms describe the device here instead of aps/switches/hostnames
+        kinds = {"ap": "ap", "switch": "switch", "gateway": "gateway"}
+        return [(_mac(e.get("entity_mac")) or None, e.get("entity_name") or None,
+                 kinds.get(str(e.get("entity_type", "")).lower())) for e in ents]
+    emacs = [_mac(m) for m in (alarm.get("entity_macs") or [])]
+    if emacs:
+        return [(m, None, None) for m in emacs]
     return [(None, None, None)]
 
 
@@ -65,6 +121,10 @@ def category(event_type, alarm):
         return "infra"
     if event_type in WIFI_TYPES or _WIFI_WORDS.search(event_type):
         return "wifi"
+    if event_type.startswith(("sw_", "gw_", "switch_", "gateway_", "vc_", "mist_edge", "ha_", "tt_")):
+        return "infra"
+    if alarm.get("group") == "security":
+        return "wifi"           # rogue/attack detection comes from the wireless side
     if alarm.get("aps") and not (alarm.get("switches") or alarm.get("gateways")):
         return "wifi"
     return "infra"
@@ -139,7 +199,7 @@ def extract(alarm, cfg, sites):
             "fingerprint": fp,
             "labels": labels,
         }
-        events.append(Event(str(aid), ident, phase, fp, ev_ts, oneshot, payload))
+        events.append(Event(str(aid), ts, ident, phase, fp, ev_ts, oneshot, payload))
     return events
 
 

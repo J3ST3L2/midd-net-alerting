@@ -37,13 +37,15 @@ class Config:
     overlap_s: int = 900              # re-fetch this far behind last success
     reconcile_interval: int = 900     # wide re-query so late updates are seen
     lookback_hours: int = 72          # width of the reconcile query
-    bootstrap_hours: int = 24         # history scanned on a first/empty start
+    bootstrap_hours: int = 72         # history scanned on a first/empty start
     bootstrap_post_open: bool = True  # post still-open alarms once at cold start
     page_limit: int = 100
     max_pages: int = 20
 
     dry_run: bool = True              # safe default: log, do not post to Keep
-    suppress_types: frozenset = frozenset({"infra_arp_failure", "infra_arp_success"})
+    suppress_types: frozenset = frozenset({
+        "infra_arp_failure", "infra_arp_success", "infra_dhcp_failure", "infra_dhcp_success",
+        "infra_dns_failure", "infra_dns_success"})
     auto_resolve_minutes: int = 30    # Mist events with no recovery signal
 
     health_max_age_s: int = 180
@@ -69,12 +71,14 @@ def load():
         overlap_s=int(os.environ.get("OVERLAP_S", "900")),
         reconcile_interval=int(os.environ.get("RECONCILE_INTERVAL_S", "900")),
         lookback_hours=int(os.environ.get("LOOKBACK_HOURS", "72")),
-        bootstrap_hours=int(os.environ.get("BOOTSTRAP_HOURS", "24")),
+        bootstrap_hours=int(os.environ.get("BOOTSTRAP_HOURS", "72")),
         bootstrap_post_open=_bool("BOOTSTRAP_POST_OPEN", "true"),
         page_limit=int(os.environ.get("PAGE_LIMIT", "100")),
         max_pages=int(os.environ.get("MAX_PAGES", "20")),
         dry_run=_bool("DRY_RUN", "true"),
-        suppress_types=_csv("SUPPRESS_TYPES", "infra_arp_failure,infra_arp_success"),
+        suppress_types=_csv("SUPPRESS_TYPES",
+                         "infra_arp_failure,infra_arp_success,infra_dhcp_failure,"
+                         "infra_dhcp_success,infra_dns_failure,infra_dns_success"),
         auto_resolve_minutes=int(os.environ.get("AUTO_RESOLVE_MINUTES", "30")),
         health_max_age_s=int(os.environ.get("HEALTH_MAX_AGE_S", "180")),
         health_unhealthy_s=int(os.environ.get("HEALTH_UNHEALTHY_S", "300")),
