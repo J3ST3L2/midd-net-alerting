@@ -1,5 +1,6 @@
 """Read-only Mist REST client (GET only, token auth, same-host pagination)."""
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,3 +70,20 @@ class MistClient:
         if not isinstance(body, list):
             raise MistError("unexpected sites response shape")
         return {s["id"]: s.get("name", "") for s in body if isinstance(s, dict) and s.get("id")}
+
+    def list_devices(self):
+        """MAC -> {ip, name, status, model} from org device stats (alarms carry no IPs)."""
+        out, page_size = {}, 1000
+        for page in range(1, 51):
+            body = self._get(self._url("/orgs/%s/stats/devices" % self.org_id,
+                                       {"type": "all", "limit": page_size, "page": page}))
+            if not isinstance(body, list):
+                raise MistError("unexpected device stats response shape")
+            for d in body:
+                if isinstance(d, dict) and d.get("mac"):
+                    out[re.sub(r"[^0-9a-f]", "", str(d["mac"]).lower())] = {
+                        "ip": d.get("ip") or "", "name": d.get("name") or "",
+                        "status": d.get("status") or "", "model": d.get("model") or ""}
+            if len(body) < page_size:
+                return out
+        raise MistError("device stats exceeded 50 pages")

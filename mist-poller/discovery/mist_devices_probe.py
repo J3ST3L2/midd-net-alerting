@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only probe: which Mist endpoint gives device IP addresses?
+"""Read-only device status probe (GET only), same env vars as mist_discover.py.
 
-GET only. Prints field names, types and counts; strings are never printed, so the
-output (and report) is safe to share. Same env vars as mist_discover.py.
+Prints device counts per type/status. Set MIST_PROBE_NAME_CONTAINS=<text> to also list
+the names (and status) of matching devices, e.g. to confirm whether alarmed devices are up.
 """
 import collections
 import json
@@ -15,10 +15,7 @@ HOST = os.environ.get("MIST_API_HOST", "api.mist.com").strip()
 ORG = os.environ.get("MIST_ORG_ID", "").strip()
 OUT = os.environ.get("MIST_DISCOVERY_OUT", "./mist-discovery-out")
 
-ENDPOINTS = [
-    "/orgs/%s/stats/devices?type=all&limit=100",
-    "/orgs/%s/inventory?limit=100",
-]
+NAME_FILTER = os.environ.get("MIST_PROBE_NAME_CONTAINS", "").lower()   # optional, e.g. "atwater"
 
 
 def token():
@@ -63,15 +60,22 @@ def main():
     if not ORG:
         sys.exit("Set MIST_ORG_ID")
     tok = token()
-    report = {}
-    for ep in ENDPOINTS:
-        status, body, link = get(ep % ORG, tok)
-        entry = {"http_status": status, "has_link_header_pagination": bool(link)}
-        if status == 200 and isinstance(body, list):
-            entry.update(summarize([r for r in body if isinstance(r, dict)]))
-        elif status == 200:
-            entry["unexpected_shape"] = type(body).__name__
-        report[ep.split("?")[0].replace(ORG, "{org}")] = entry
+    rows = []
+    for page in range(1, 51):
+        status, body, _ = get("/orgs/%s/stats/devices?type=all&limit=1000&page=%d" % (ORG, page), tok)
+        if status != 200 or not isinstance(body, list):
+            sys.exit("device stats failed: HTTP %s" % status)
+        rows += [r for r in body if isinstance(r, dict)]
+        if len(body) < 1000:
+            break
+    report = {"devices": len(rows), "pages": page,
+              "status_values": dict(collections.Counter(str(r.get("status")) for r in rows)),
+              "by_type_and_status": dict(collections.Counter(
+                  "%s/%s" % (r.get("type"), r.get("status")) for r in rows)),
+              "with_ip": sum(1 for r in rows if r.get("ip"))}
+    if NAME_FILTER:   # names you asked for plus status; no IPs or MACs
+        report["matches"] = sorted("%s: %s" % (r.get("name"), r.get("status"))
+                                   for r in rows if NAME_FILTER in str(r.get("name", "")).lower())
     os.makedirs(OUT, mode=0o700, exist_ok=True)
     with open(os.path.join(OUT, "devices_probe.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, sort_keys=True)

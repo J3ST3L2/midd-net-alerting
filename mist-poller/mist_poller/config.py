@@ -36,6 +36,7 @@ class Config:
     poll_interval: int = 60
     overlap_s: int = 900              # re-fetch this far behind last success
     reconcile_interval: int = 900     # wide re-query so late updates are seen
+    device_refresh_s: int = 600       # device list (IP/model/name) cache lifetime
     lookback_hours: int = 72          # width of the reconcile query
     bootstrap_hours: int = 72         # history scanned on a first/empty start
     bootstrap_post_open: bool = True  # post still-open alarms once at cold start
@@ -70,6 +71,7 @@ def load():
         poll_interval=int(os.environ.get("POLL_INTERVAL_S", "60")),
         overlap_s=int(os.environ.get("OVERLAP_S", "900")),
         reconcile_interval=int(os.environ.get("RECONCILE_INTERVAL_S", "900")),
+        device_refresh_s=int(os.environ.get("DEVICE_REFRESH_S", "600")),
         lookback_hours=int(os.environ.get("LOOKBACK_HOURS", "72")),
         bootstrap_hours=int(os.environ.get("BOOTSTRAP_HOURS", "72")),
         bootstrap_post_open=_bool("BOOTSTRAP_POST_OPEN", "true"),

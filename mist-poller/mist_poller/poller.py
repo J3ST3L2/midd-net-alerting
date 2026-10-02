@@ -16,6 +16,8 @@ class Poller:
         self.cfg, self.mist, self.keep, self.state, self.clock = cfg, mist, keep, state, clock
         self.sites = {}
         self.sites_at = 0
+        self.devices = {}
+        self.devices_at = 0
 
     # ---- one cycle -------------------------------------------------------
     def run_cycle(self):
@@ -32,6 +34,7 @@ class Poller:
             start = last_success - self.cfg.overlap_s
 
         self._refresh_sites(now)
+        self._refresh_devices(now)
         alarms = self.mist.search_alarms(start, now)   # raises on any failure: cursor stays put
         if wide and not bootstrapping:
             alarms = self._with_stale_lookups(alarms, start)
@@ -40,7 +43,7 @@ class Poller:
         events, bad = [], 0
         for a in alarms:
             try:
-                events.extend(extract(a, self.cfg, self.sites))
+                events.extend(extract(a, self.cfg, self.sites, self.devices))
             except ValueError as e:
                 bad += 1
                 log.warning("skipping malformed alarm: %s", e)
@@ -72,6 +75,16 @@ class Poller:
                     have.add(a.get("id"))
                     alarms.append(a)
         return alarms
+
+    def _refresh_devices(self, now):
+        if self.devices and now - self.devices_at < self.cfg.device_refresh_s:
+            return
+        try:
+            self.devices = self.mist.list_devices()
+            self.devices_at = now
+        except MistError as e:
+            log.warning("device lookup failed (%s); IPs may be missing", e)
+            self.devices_at = now - self.cfg.device_refresh_s + 120   # retry in ~2 min
 
     def _refresh_sites(self, now):
         if self.sites and now - self.sites_at < SITES_REFRESH_S:
