@@ -130,8 +130,10 @@ def category(event_type, alarm):
     return "infra"
 
 
-def extract(alarm, cfg, sites):
-    """Events for one alarm. [] if suppressed; ValueError if malformed."""
+def extract(alarm, cfg, sites, devices=None):
+    """Events for one alarm. [] if suppressed; ValueError if malformed.
+    `devices` is the MAC -> {ip,name,model} cache; alarms themselves carry no IPs."""
+    devices = devices or {}
     aid, typ = alarm.get("id"), alarm.get("type")
     if not aid or not typ:
         raise ValueError("alarm missing id/type")
@@ -169,7 +171,8 @@ def extract(alarm, cfg, sites):
         if ident in seen:
             continue
         seen.add(ident)
-        device = name or mac or "unknown-device"
+        info = devices.get(mac, {}) if mac else {}
+        device = name or info.get("name") or mac or "unknown-device"
         fp = ("mist:alarms:%s:%s" % (canon, ident)) if canon else ("mist:alarm:%s:%s" % (aid, ident))
         labels = {
             "mist_topic": "alarms",
@@ -182,6 +185,8 @@ def extract(alarm, cfg, sites):
             "mist_site_name": sites.get(site_id, ""),
             "mist_device": device,
             "mist_mac": mac or "",
+            "mist_ip": info.get("ip") or "n/a",
+            "mist_model": info.get("model") or "",
             "mist_device_kind": kind or "",
             "mist_alarm_id": str(aid),
             "mist_alarm_count": str(alarm.get("count", 1)),

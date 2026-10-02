@@ -36,6 +36,9 @@ workflow:
                 - title: MAC
                   value: "{{ alert.labels.mist_mac }}"
                   short: true
+                - title: IP
+                  value: "{{ alert.labels.mist_ip }}"
+                  short: true
                 - title: State
                   value: "{{ alert.labels.mist_state }}"
                   short: true
@@ -67,6 +70,9 @@ workflow:
                   short: true
                 - title: MAC
                   value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: IP
+                  value: "{{ alert.labels.mist_ip }}"
                   short: true
                 - title: State
                   value: "{{ alert.labels.mist_state }}"

@@ -38,6 +38,9 @@ class FakeMist:
     def list_sites(self):
         return {"s1": "Davis Library"}
 
+    def list_devices(self):
+        return {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45"}}
+
 
 class FakeKeep:
     def __init__(self):
@@ -143,6 +146,26 @@ class NormalizeTests(unittest.TestCase):
     def test_unpaired_type_is_oneshot(self):
         e = extract(alarm("a", "switch_restarted", switches=[SW1]), self.cfg, {})[0]
         self.assertTrue(e.oneshot)
+
+    def test_ip_and_name_from_device_cache(self):
+        devs = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45"}}
+        a = alarm("a", "device_down", aps=[AP1, AP2], hostnames=["only-one"])   # misaligned
+        e1, e2 = extract(a, self.cfg, {}, devs)
+        self.assertEqual(e1.payload["labels"]["mist_ip"], "10.1.2.3")
+        self.assertEqual(e1.payload["labels"]["mist_device"], "AP-ONE")
+        self.assertEqual(e1.payload["labels"]["mist_model"], "AP45")
+        self.assertEqual(e2.payload["labels"]["mist_ip"], "n/a")
+        self.assertEqual(e2.payload["labels"]["mist_device"], AP2)
+
+    def test_device_lookup_failure_is_not_fatal(self):
+        p, mist, keep, clock = make()
+
+        def boom():
+            raise MistError("nope")
+        mist.list_devices = boom
+        mist.alarms = [alarm("d1", "device_down", ts=NOW - 60, aps=[AP1])]
+        p.run_cycle()
+        self.assertEqual(keep.posted[0]["labels"]["mist_ip"], "n/a")
 
     def test_marvis_identity_from_impacted_entities(self):
         a = alarm("m1", "port_flap", status="open", group="marvis", severity="warn",
