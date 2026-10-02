@@ -205,7 +205,15 @@ def extract(alarm, cfg, sites, devices=None):
             "description": msg,
             "fingerprint": fp,
             "labels": labels,
+            # Flat identity fields, named like the LibreNMS alerts, so one Keep Mapping rule
+            # keyed on ip / hostname / mac enriches every source the same way.
+            "device": device,
+            "hostname": device,
+            "mac": mac or "",
+            "location": sites.get(site_id, ""),
         }
+        if info.get("ip"):
+            payload["ip"] = info["ip"]      # omitted when unknown so mappings never match a blank
         events.append(Event(str(aid), ts, ident, phase, fp, ev_ts, oneshot, payload))
     return events
 
