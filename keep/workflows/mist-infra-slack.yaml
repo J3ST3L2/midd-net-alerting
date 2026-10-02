@@ -6,7 +6,7 @@ workflow:
 
   triggers:
     - type: alert
-      cel: source.contains("mist") && !labels.mist_event_type.matches("(?i).*(ap|wlan|ssid|radio|client|roam|auth|wifi|wireless).*")
+      cel: source.contains("mist") && labels.mist_category != "wifi"
 
   actions:
     - name: slack-resolved-update-infra

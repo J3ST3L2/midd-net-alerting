@@ -14,3 +14,4 @@ mist-discovery-out/
 mist-api-token
 __pycache__/
 *.pyc
+deploy/mist-poller/.env
