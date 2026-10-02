@@ -1,0 +1,287 @@
+data_dir: /var/lib/vector
+
+sources:
+  #
+  # Public Mist webhook ingress is terminated by Nginx at:
+  #   https://keep.middlebury.edu/mist-webhook
+  # Nginx proxies the request to this loopback-only listener.
+  #
+  mist_webhook:
+    type: http_server
+    address: 127.0.0.1:8686
+
+    decoding:
+      codec: json
+
+    framing:
+      method: bytes
+
+    headers:
+      - user-agent
+      - x-mist-signature
+      - x-mist-signature-v2
+
+
+transforms:
+  #
+  # Mist can deliver either a single event object or an envelope containing
+  # events: []. unnest() preserves the envelope fields while producing one
+  # Vector event per item under .events.
+  #
+  explode_mist_events:
+    type: remap
+
+    inputs:
+      - mist_webhook
+
+    drop_on_error: true
+
+    source: |
+      if exists(.events) && is_array(.events) {
+        . = unnest!(.events)
+      }
+
+
+  #
+  # Convert Mist's event structure into the schema Keep expects.
+  #
+  # Do not use a straight "to_string(a) ?? to_string(b)" fallback chain here.
+  # Vector can coerce a missing value to an empty string, which prevents later
+  # candidates from being evaluated. Use is_nullish() explicitly so real Mist
+  # fields such as state and message survive normalization.
+  #
+  normalize_mist_alert:
+    type: remap
+
+    inputs:
+      - explode_mist_events
+
+    drop_on_error: true
+
+    source: |
+      event = if exists(.events) && is_object(.events) { .events } else { . }
+
+      topic = if !is_nullish(.topic) {
+        downcase(to_string(.topic) ?? "alarms")
+      } else if !is_nullish(event.topic) {
+        downcase(to_string(event.topic) ?? "alarms")
+      } else {
+        "alarms"
+      }
+
+      event_type = if !is_nullish(event.type) {
+        downcase(to_string(event.type) ?? "mist_alert")
+      } else if !is_nullish(event.event) {
+        downcase(to_string(event.event) ?? "mist_alert")
+      } else if !is_nullish(event.alert) {
+        downcase(to_string(event.alert) ?? "mist_alert")
+      } else if !is_nullish(event.name) {
+        downcase(to_string(event.name) ?? "mist_alert")
+      } else {
+        "mist_alert"
+      }
+
+      state = if is_object(event.details) && !is_nullish(event.details.state) {
+        downcase(to_string(event.details.state) ?? "")
+      } else if !is_nullish(event.state) {
+        downcase(to_string(event.state) ?? "")
+      } else if !is_nullish(event.status) {
+        downcase(to_string(event.status) ?? "")
+      } else {
+        ""
+      }
+
+      severity_raw = if !is_nullish(event.severity) {
+        downcase(to_string(event.severity) ?? "warning")
+      } else if !is_nullish(event.level) {
+        downcase(to_string(event.level) ?? "warning")
+      } else {
+        "warning"
+      }
+
+      severity = if severity_raw == "critical" ||
+                    severity_raw == "emergency" ||
+                    severity_raw == "fatal" {
+        "critical"
+      } else if severity_raw == "high" ||
+                severity_raw == "major" {
+        "high"
+      } else if severity_raw == "warning" ||
+                severity_raw == "warn" ||
+                severity_raw == "minor" {
+        "warning"
+      } else {
+        "low"
+      }
+
+      is_resolved =
+        state == "validated" ||
+        state == "resolved" ||
+        state == "cleared" ||
+        match(
+          event_type,
+          r'(^|_)(reconnected|resolved|cleared|online|up)($|_)'
+        )
+
+      status_value = if is_resolved {
+        "resolved"
+      } else {
+        "firing"
+      }
+
+      device = if !is_nullish(event.device_name) {
+        to_string(event.device_name) ?? "unknown-device"
+      } else if !is_nullish(event.hostname) {
+        to_string(event.hostname) ?? "unknown-device"
+      } else if !is_nullish(event.ap_name) {
+        to_string(event.ap_name) ?? "unknown-device"
+      } else if !is_nullish(event.switch_name) {
+        to_string(event.switch_name) ?? "unknown-device"
+      } else if !is_nullish(event.gateway_name) {
+        to_string(event.gateway_name) ?? "unknown-device"
+      } else if !is_nullish(event.name) {
+        to_string(event.name) ?? "unknown-device"
+      } else {
+        "unknown-device"
+      }
+
+      mac = if !is_nullish(event.mac) {
+        downcase(to_string(event.mac) ?? "")
+      } else if !is_nullish(event.ap) {
+        downcase(to_string(event.ap) ?? "")
+      } else if !is_nullish(event.device_mac) {
+        downcase(to_string(event.device_mac) ?? "")
+      } else {
+        ""
+      }
+
+      site_id = if !is_nullish(event.site_id) {
+        to_string(event.site_id) ?? ""
+      } else if !is_nullish(.site_id) {
+        to_string(.site_id) ?? ""
+      } else {
+        ""
+      }
+
+      org_id = if !is_nullish(event.org_id) {
+        to_string(event.org_id) ?? ""
+      } else if !is_nullish(.org_id) {
+        to_string(.org_id) ?? ""
+      } else {
+        ""
+      }
+
+      site_name = if !is_nullish(event.site_name) {
+        to_string(event.site_name) ?? ""
+      } else if !is_nullish(.site_name) {
+        to_string(.site_name) ?? ""
+      } else {
+        ""
+      }
+
+      message_text = if !is_nullish(event.text) {
+        to_string(event.text) ?? event_type
+      } else if !is_nullish(event.reason) {
+        to_string(event.reason) ?? event_type
+      } else if !is_nullish(event.message) {
+        to_string(event.message) ?? event_type
+      } else {
+        event_type
+      }
+
+      event_time = if !is_nullish(event.timestamp) {
+        to_string(event.timestamp) ?? format_timestamp!(now(), format: "%+")
+      } else if !is_nullish(event.time) {
+        to_string(event.time) ?? format_timestamp!(now(), format: "%+")
+      } else {
+        format_timestamp!(now(), format: "%+")
+      }
+
+      canonical_type = if contains(event_type, "down") ||
+                          contains(event_type, "offline") ||
+                          contains(event_type, "reconnected") ||
+                          contains(event_type, "online") {
+        "device_state"
+      } else {
+        event_type
+      }
+
+      identity = if mac != "" {
+        mac
+      } else {
+        downcase(device)
+      }
+
+      fingerprint_value =
+        "mist:" +
+        topic +
+        ":" +
+        canonical_type +
+        ":" +
+        identity
+
+      . = {}
+
+      .name = device + ": " + event_type
+      .status = status_value
+      .severity = severity
+      .lastReceived = event_time
+      .service = "network"
+      .source = ["mist"]
+      .message = message_text
+      .description = message_text
+      .fingerprint = fingerprint_value
+
+      .labels = {}
+
+      .labels.mist_topic = topic
+      .labels.mist_event_type = event_type
+      .labels.mist_state = state
+      .labels.mist_org_id = org_id
+      .labels.mist_site_id = site_id
+      .labels.mist_site_name = site_name
+      .labels.mist_device = device
+      .labels.mist_mac = mac
+
+
+sinks:
+  #
+  # KeepHQ mesh-ingestion endpoint.
+  #
+  keep:
+    type: http
+
+    inputs:
+      - normalize_mist_alert
+
+    uri: http://127.0.0.1:8088/alerts/event
+    method: post
+    compression: none
+
+    encoding:
+      codec: json
+
+    batch:
+      max_events: 1
+      timeout_secs: 1
+
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block
+
+    acknowledgements:
+      enabled: true
+
+    request:
+      headers:
+        Content-Type: application/json
+        X-Service-Name: mist-vector
+
+      timeout_secs: 15
+      retry_attempts: 20
+      retry_initial_backoff_secs: 1
+      retry_max_duration_secs: 30
+
+    healthcheck:
+      enabled: false
