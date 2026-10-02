@@ -23,5 +23,21 @@ services:
       retries: 3
       start_period: 10s
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: keep-mist-cloudflared
+    restart: unless-stopped
+    network_mode: host
+
+    volumes:
+      - ./secrets/cloudflared-token:/run/secrets/cloudflared-token:ro,Z
+
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token-file
+      - /run/secrets/cloudflared-token
+
 volumes:
   vector-data:
