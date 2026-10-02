@@ -74,7 +74,8 @@ matching firing alert. Reset the state so the cold start posts what is still ope
 ```bash
 cd /opt/stacks/keep-config/deploy/mist-poller
 sudo docker compose down
-sudo rm -rf /opt/stacks/mist-poller/state/poller/*
+sudo sh -c 'rm -rf /opt/stacks/mist-poller/state/poller/*'   # sh -c: the dir is owned by uid 10001
+sudo ls -A /opt/stacks/mist-poller/state/poller                 # must print nothing
 sudo sed -i 's/^DRY_RUN=.*/DRY_RUN=false/' .env
 sudo docker compose up -d
 ```
