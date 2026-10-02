@@ -167,6 +167,57 @@ def window_semantics(wide, narrow_ids, now):
     return result
 
 
+def targeted_window_test(wide):
+    """Probe start/end against alarms whose timestamps differ.
+
+    For up to 4 alarms, query a +-120s window around each timestamp field and
+    report whether the alarm comes back. The field(s) that return it are what
+    start/end filters on. Alarms with a large last_seen - timestamp gap are
+    preferred because they separate the fields cleanly.
+    """
+    cands = [a for a in wide if isinstance(a.get("timestamp"), int)
+             and isinstance(a.get("last_seen"), int)]
+    cands.sort(key=lambda a: a["last_seen"] - a["timestamp"], reverse=True)
+    picks = cands[:3]
+    res = [a for a in wide if isinstance(a.get("resolved_time"), int)]
+    if res:
+        picks.append(res[0])
+    out = []
+    for a in picks:
+        row = {"type": a.get("type"), "status": a.get("status"),
+               "last_seen_minus_timestamp_s": a["last_seen"] - a["timestamp"]}
+        for k in ("timestamp", "last_seen", "resolved_time"):
+            v = a.get(k)
+            if not isinstance(v, int):
+                continue
+            got, _, st = search(v - 120, v + 120)
+            row["window_around_" + k] = {
+                "http_ok": all(s == 200 for s in st),
+                "returned_this_alarm": any(g.get("id") == a.get("id") for g in got),
+                "alarms_in_window": len(got)}
+        out.append(row)
+    return out
+
+
+def array_alignment(wide):
+    """Do device arrays line up with each other and with count?"""
+    rows = collections.Counter()
+    for a in wide:
+        lens = {k: len(a[k]) for k in ("aps", "hostnames", "macs", "switches")
+                if isinstance(a.get(k), list)}
+        rows[json.dumps({"count": a.get("count"), **lens}, sort_keys=True)] += 1
+    return [{"shape": json.loads(k), "alarms": n} for k, n in rows.most_common(25)]
+
+
+def samples_by_type(wide):
+    seen = {}
+    for a in wide:
+        t = str(a.get("type"))
+        if t not in seen:
+            seen[t] = redact(a)
+    return seen
+
+
 def resolved_check(wide):
     res = [a for a in wide if str(a.get("status")) == "resolved"]
     return {
@@ -199,6 +250,9 @@ def main():
         report["narrow_query"] = {"http_statuses": nstat, "alarm_count": len(narrow)}
         report["start_end_filters_on"] = window_semantics(
             wide, {a.get("id") for a in narrow}, now)
+        report["targeted_window_test"] = targeted_window_test(wide)
+        report["array_alignment"] = array_alignment(wide)
+        report["samples_by_type"] = samples_by_type(wide)
         if wide:
             report["redacted_sample"] = redact(wide[0])
             open_ex = next((a for a in wide if a.get("status") == "open"), None)
