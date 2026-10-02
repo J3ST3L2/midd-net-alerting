@@ -1,0 +1,75 @@
+workflow:
+  id: middlebury-mist-wifi-slack
+  name: Middlebury Mist Wi-Fi Slack
+  description: Mist Wi-Fi alert lifecycle delivery through NMS-Alert-Bot to mist-wifi-alerts.
+  disabled: false
+
+  triggers:
+    - type: alert
+      cel: source.contains("mist") && labels.mist_event_type.matches("(?i).*(ap|wlan|ssid|radio|client|roam|auth|wifi|wireless).*")
+
+  actions:
+    - name: slack-resolved-update-wifi
+      if: "'{{ alert.slack_timestamp_mist_wifi_v1 }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp_mist_wifi_v1 }}"
+          channel: C0ANVEVECTD
+          enrich_alert:
+            - key: slack_timestamp_mist_wifi_v1
+              value: ""
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} RECOVERED • {{ alert.labels.mist_event_type }}"
+              color: "#39ff14"
+              author_name: "{{ alert.labels.mist_device }} RECOVERED"
+              fields:
+                - title: Event
+                  value: "{{ alert.labels.mist_event_type }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Wi-Fi • Keep"
+
+    - name: slack-firing-wifi
+      if: "not '{{ alert.slack_timestamp_mist_wifi_v1 }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0ANVEVECTD
+          enrich_alert:
+            - key: slack_timestamp_mist_wifi_v1
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} DOWN • {{ alert.labels.mist_event_type }}"
+              color: "#ff3131"
+              author_name: "{{ alert.labels.mist_device }} DOWN"
+              fields:
+                - title: Event
+                  value: "{{ alert.labels.mist_event_type }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Wi-Fi • Keep"
