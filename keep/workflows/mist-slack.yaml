@@ -57,7 +57,7 @@ workflow:
               footer: "Mist • Keep"
 
     - name: slack-firing-net
-      if: "not '{{ alert.slack_timestamp_net_mist_v1 }}' and '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.slack_timestamp_net_mist_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap'"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -100,3 +100,46 @@ workflow:
                   short: true
               footer: "Mist • Keep"
 
+    - name: slack-firing-net-port-flap
+      if: "not '{{ alert.slack_timestamp_net_mist_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' == 'port_flap'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0C4MSELS4D
+          enrich_alert:
+            - key: slack_timestamp_net_mist_v1
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} PORT FLAP • {{ alert.labels.mist_event_type }}"
+              color: "#ffb000"
+              author_name: "{{ alert.labels.mist_device }} PORT FLAP"
+              fields:
+                - title: Event
+                  value: "{{ alert.labels.mist_event_type }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: IP
+                  value: "{{ alert.labels.mist_ip }}"
+                  short: true
+                - title: Model
+                  value: "{{ alert.labels.mist_model }}"
+                  short: true
+                - title: Firmware
+                  value: "{{ alert.labels.mist_firmware }}"
+                  short: true
+                - title: Last seen by Mist
+                  value: "{{ alert.labels.mist_last_seen }}"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist • Keep"
