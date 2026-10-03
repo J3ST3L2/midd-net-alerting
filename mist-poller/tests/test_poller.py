@@ -150,13 +150,18 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(e.oneshot)
 
     def test_ip_and_name_from_device_cache(self):
-        devs = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45"}}
+        devs = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45",
+                      "version": "0.14.1", "last_seen": NOW - 120}}
         a = alarm("a", "device_down", aps=[AP1, AP2], hostnames=["only-one"])   # misaligned
         e1, e2 = extract(a, self.cfg, {}, devs)
         self.assertEqual(e1.payload["labels"]["mist_ip"], "10.1.2.3")
         self.assertEqual(e1.payload["labels"]["mist_device"], "AP-ONE")
         self.assertEqual(e1.payload["labels"]["mist_model"], "AP45")
         self.assertEqual(e2.payload["labels"]["mist_ip"], "n/a")
+        self.assertEqual(e1.payload["labels"]["mist_firmware"], "0.14.1")
+        self.assertEqual(e1.payload["labels"]["mist_last_seen"][:10], "2026-09-21")
+        self.assertEqual(e2.payload["labels"]["mist_last_seen"], "n/a")
+        self.assertEqual(e2.payload["labels"]["mist_model"], "n/a")
         self.assertEqual(e2.payload["labels"]["mist_device"], AP2)
 
     def test_device_lookup_failure_is_not_fatal(self):

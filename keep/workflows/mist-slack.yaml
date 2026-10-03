@@ -39,6 +39,15 @@ workflow:
                 - title: IP
                   value: "{{ alert.labels.mist_ip }}"
                   short: true
+                - title: Model
+                  value: "{{ alert.labels.mist_model }}"
+                  short: true
+                - title: Firmware
+                  value: "{{ alert.labels.mist_firmware }}"
+                  short: true
+                - title: Last seen by Mist
+                  value: "{{ alert.labels.mist_last_seen }}"
+                  short: true
                 - title: State
                   value: "{{ alert.labels.mist_state }}"
                   short: true
@@ -73,6 +82,15 @@ workflow:
                   short: true
                 - title: IP
                   value: "{{ alert.labels.mist_ip }}"
+                  short: true
+                - title: Model
+                  value: "{{ alert.labels.mist_model }}"
+                  short: true
+                - title: Firmware
+                  value: "{{ alert.labels.mist_firmware }}"
+                  short: true
+                - title: Last seen by Mist
+                  value: "{{ alert.labels.mist_last_seen }}"
                   short: true
                 - title: State
                   value: "{{ alert.labels.mist_state }}"
