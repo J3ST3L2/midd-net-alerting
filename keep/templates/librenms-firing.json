@@ -16,6 +16,7 @@
     "location": "Carr Hall",
     "rule": "Device Down",
     "summary": "Device Down",
+    "reason": "ICMP ping failed; SNMP timeout",
     "fired": "2026-09-27 06:45:46",
     "resolved": null,
     "duration": null,
