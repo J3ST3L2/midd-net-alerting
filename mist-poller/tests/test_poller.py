@@ -150,17 +150,25 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(e.oneshot)
 
     def test_ip_and_name_from_device_cache(self):
-        devs = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45"}}
+        devs = {AP1: {"ip": "10.1.2.3", "name": "AP-ONE", "model": "AP45",
+                      "version": "0.14.1", "last_seen": NOW - 120}}
         a = alarm("a", "device_down", aps=[AP1, AP2], hostnames=["only-one"])   # misaligned
         e1, e2 = extract(a, self.cfg, {}, devs)
         self.assertEqual(e1.payload["labels"]["mist_ip"], "10.1.2.3")
         self.assertEqual(e1.payload["labels"]["mist_device"], "AP-ONE")
         self.assertEqual(e1.payload["labels"]["mist_model"], "AP45")
         self.assertEqual(e2.payload["labels"]["mist_ip"], "n/a")
+<<<<<<< HEAD
         self.assertEqual(e1.payload["ip"], "10.1.2.3")
         self.assertEqual((e1.payload["hostname"], e1.payload["device"]), ("AP-ONE", "AP-ONE"))
         self.assertEqual(e1.payload["mac"], AP1)
         self.assertNotIn("ip", e2.payload)
+=======
+        self.assertEqual(e1.payload["labels"]["mist_firmware"], "0.14.1")
+        self.assertEqual(e1.payload["labels"]["mist_last_seen"][:10], "2026-09-21")
+        self.assertEqual(e2.payload["labels"]["mist_last_seen"], "n/a")
+        self.assertEqual(e2.payload["labels"]["mist_model"], "n/a")
+>>>>>>> origin/main
         self.assertEqual(e2.payload["labels"]["mist_device"], AP2)
 
     def test_device_lookup_failure_is_not_fatal(self):
@@ -172,6 +180,17 @@ class NormalizeTests(unittest.TestCase):
         mist.alarms = [alarm("d1", "device_down", ts=NOW - 60, aps=[AP1])]
         p.run_cycle()
         self.assertEqual(keep.posted[0]["labels"]["mist_ip"], "n/a")
+
+    def test_reason_from_alarm_marvis_or_default(self):
+        def r(t, **kw):
+            return extract(alarm("a", t, **kw), self.cfg, {})[0].payload["labels"]["mist_reason"]
+        self.assertEqual(r("vc_master_changed", switches=[SW1], reasons=["Master switched", "x"]),
+                         "Master switched; x")
+        self.assertEqual(r("port_flap", status="open", impacted_entities=[
+            {"entity_mac": SW1, "event_name": "port_flap", "port_id": "ge-0/0/4"}]),
+            "port flap on port ge-0/0/4")
+        self.assertIn("lost its connection", r("device_down", aps=[AP1]))
+        self.assertEqual(r("sw_ospf_neighbor_adjacency_failed", switches=[SW1]), "n/a")
 
     def test_marvis_identity_from_impacted_entities(self):
         a = alarm("m1", "port_flap", status="open", group="marvis", severity="warn",

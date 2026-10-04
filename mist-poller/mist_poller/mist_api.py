@@ -83,7 +83,9 @@ class MistClient:
                 if isinstance(d, dict) and d.get("mac"):
                     out[re.sub(r"[^0-9a-f]", "", str(d["mac"]).lower())] = {
                         "ip": d.get("ip") or "", "name": d.get("name") or "",
-                        "status": d.get("status") or "", "model": d.get("model") or ""}
+                        "status": d.get("status") or "", "model": d.get("model") or "",
+                        "version": d.get("version") or "",
+                        "last_seen": d.get("last_seen") if isinstance(d.get("last_seen"), int) else 0}
             if len(body) < page_size:
                 return out
         raise MistError("device stats exceeded 50 pages")
