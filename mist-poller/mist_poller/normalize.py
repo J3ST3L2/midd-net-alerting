@@ -116,6 +116,30 @@ def _devices(alarm):
     return [(None, None, None)]
 
 
+# Plain-English fallback for alarm types whose payload carries no reason of its own.
+DEFAULT_REASONS = {
+    "device_down": "Device lost its connection to Mist (disconnected)",
+    "switch_down": "Switch lost its connection to Mist (disconnected)",
+    "gateway_down": "Gateway lost its connection to Mist (disconnected)",
+    "port_flap": "Port link is repeatedly going up and down",
+    "bad_cable": "Cable fault detected on the port",
+    "rogue_ap": "Unauthorised access point detected nearby",
+    "loop_detected_by_ap": "Layer 2 loop detected by an access point",
+}
+
+
+def reason(alarm, event_type):
+    """Why the alarm fired: Mist's own `reasons`, else a Marvis event name, else a default."""
+    items = [str(r).strip() for r in (alarm.get("reasons") or []) if r]
+    if items:
+        return "; ".join(items[:3])[:200]
+    for e in alarm.get("impacted_entities") or []:
+        if isinstance(e, dict) and e.get("event_name"):
+            port = ("on port %s" % e["port_id"]) if e.get("port_id") else ""
+            return ("%s %s" % (str(e["event_name"]).replace("_", " "), port)).strip()[:200]
+    return DEFAULT_REASONS.get(event_type, "")
+
+
 def category(event_type, alarm):
     if event_type in INFRA_TYPES:
         return "infra"
@@ -190,6 +214,7 @@ def extract(alarm, cfg, sites, devices=None):
             "mist_ip": info.get("ip") or "n/a",
             "mist_model": info.get("model") or "n/a",
             "mist_firmware": info.get("version") or "n/a",
+            "mist_reason": reason(alarm, typ) or "n/a",
             "mist_last_seen": _iso(info["last_seen"]) if info.get("last_seen") else "n/a",
             "mist_device_kind": kind or "",
             "mist_alarm_id": str(aid),
