@@ -89,3 +89,18 @@ class MistClient:
             if len(body) < page_size:
                 return out
         raise MistError("device stats exceeded 50 pages")
+
+    def search_device_events(self, mac, start, end, types=None, limit=20):
+        """Device-level events for a MAC in [start, end]. Alarms carry no reason text for
+        device_down/reconnected; the device events API does. Returns [] on any failure."""
+        params = {"mac": mac, "start": int(start), "end": int(end), "limit": limit}
+        if types:
+            params["type"] = ",".join(types)
+        try:
+            body = self._get(self._url("/orgs/%s/devices/events/search" % self.org_id, params))
+        except MistError:
+            return []
+        if not isinstance(body, dict):
+            return []
+        results = body.get("results")
+        return results if isinstance(results, list) else []
