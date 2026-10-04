@@ -43,6 +43,11 @@ class FakeMist:
     def list_devices(self):
         return dict(self.devices)
 
+    device_events_result = []
+
+    def search_device_events(self, mac, start, end, types=None, limit=20):
+        return list(self.device_events_result)
+
 
 class FakeKeep:
     def __init__(self):
@@ -382,6 +387,57 @@ class LifecycleTests(unittest.TestCase):
             p.run_cycle()
             clock.t += 60
         self.assertEqual(statuses(keep), [("device_down", "firing")])
+
+    def test_reason_enriched_from_device_events_for_device_down(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.device_events_result = [
+            {"type": "AP_DISCONNECTED_EVENT", "reason": "power loss", "timestamp": clock.t - 25}]
+        mist.alarms = [alarm("d1", "device_down", ts=clock.t - 30, aps=[AP1])]
+        p.run_cycle()
+        self.assertEqual(len(keep.posted), 1)
+        self.assertIn("power loss", keep.posted[0]["labels"]["mist_reason"])
+        self.assertNotEqual(keep.posted[0]["labels"]["mist_reason"],
+                            "Device lost its connection to Mist (disconnected)")
+
+    def test_reason_lookup_disabled_keeps_default(self):
+        import dataclasses as dc
+        p, mist, keep, clock = bootstrapped()
+        p.cfg = dc.replace(p.cfg, reason_lookup=False)
+        mist.device_events_result = [
+            {"type": "AP_DISCONNECTED_EVENT", "reason": "power loss", "timestamp": clock.t - 25}]
+        mist.alarms = [alarm("d1", "device_down", ts=clock.t - 30, aps=[AP1])]
+        p.run_cycle()
+        self.assertEqual(keep.posted[0]["labels"]["mist_reason"],
+                         "Device lost its connection to Mist (disconnected)")
+
+    def test_reason_lookup_budget_caps_api_calls(self):
+        import dataclasses as dc
+        p, mist, keep, clock = bootstrapped()
+        p.cfg = dc.replace(p.cfg, reason_lookups_per_cycle=1)
+        calls = []
+        orig = mist.search_device_events
+
+        def counting(mac, s, e, types=None, limit=20):
+            calls.append(mac)
+            return orig(mac, s, e, types, limit)
+        mist.search_device_events = counting
+        mist.alarms = [alarm("d%d" % i, "device_down", ts=clock.t - 30, aps=[AP1 if i == 0 else AP2])
+                       for i in range(2)]
+        p.run_cycle()
+        self.assertEqual(len(calls), 1)
+
+    def test_reason_lookup_failure_is_not_fatal(self):
+        p, mist, keep, clock = bootstrapped()
+
+        def boom(mac, s, e, types=None, limit=20):
+            raise MistError("nope")
+        mist.search_device_events = boom
+        mist.alarms = [alarm("d1", "device_down", ts=clock.t - 30, aps=[AP1])]
+        try:
+            p.run_cycle()
+        except Exception as e:
+            self.fail("lookup failure should not crash: %s" % e)
+        self.assertEqual(len(keep.posted), 1)
 
     def test_info_oneshot_events_are_not_posted(self):
         p, mist, keep, clock = bootstrapped()

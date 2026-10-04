@@ -50,6 +50,8 @@ class Config:
     auto_resolve_minutes: int = 30    # Mist events with no recovery signal
     suppress_info_events: bool = True  # drop info-severity events with no recovery (restarts)
     self_correct_s: int = 300         # device must look connected on refreshes this far apart
+    reason_lookup: bool = True        # fetch per-device Mist events to enrich 'reason' on device_down
+    reason_lookups_per_cycle: int = 25
 
     health_max_age_s: int = 180
     health_unhealthy_s: int = 300
@@ -88,5 +90,7 @@ def load():
         self_correct_s=int(os.environ.get("SELF_CORRECT_S", "300")),
         health_max_age_s=int(os.environ.get("HEALTH_MAX_AGE_S", "180")),
         health_unhealthy_s=int(os.environ.get("HEALTH_UNHEALTHY_S", "300")),
+        reason_lookup=_bool("REASON_LOOKUP", "true"),
+        reason_lookups_per_cycle=int(os.environ.get("REASON_LOOKUPS_PER_CYCLE", "25")),
     )
     return cfg

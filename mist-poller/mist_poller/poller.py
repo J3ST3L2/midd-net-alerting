@@ -102,6 +102,7 @@ class Poller:
     # ---- lifecycle -------------------------------------------------------
     def _apply(self, events, now, silent, stats):
         st, ttl = self.state, self.cfg.auto_resolve_minutes * 60
+        lookup_budget = self.cfg.reason_lookups_per_cycle if self.cfg.reason_lookup else 0
         for ev in events:
             if st.seen(ev.alarm_id, ev.device_key, ev.phase):
                 continue
@@ -117,9 +118,19 @@ class Poller:
                     continue                              # would fire and resolve instantly
                 auto_at = ev.ts + ttl if ev.oneshot else None
                 status = "silent" if silent else "firing"
-                st.upsert_alert(ev.fingerprint, status, ev.ts, ev.alarm_id, ev.alarm_ts, auto_at, ev.payload, now)
+                payload = ev.payload
+                if (lookup_budget > 0 and ev.phase == "fire"
+                        and ":device_state:" in ev.fingerprint
+                        and payload["labels"].get("mist_mac")
+                        and payload["labels"].get("mist_reason") in ("", "n/a",
+                            "Device lost its connection to Mist (disconnected)")):
+                    reason = self._lookup_device_reason(payload["labels"]["mist_mac"], ev.alarm_ts)
+                    lookup_budget -= 1
+                    if reason:
+                        payload = dict(payload, labels=dict(payload["labels"], mist_reason=reason))
+                st.upsert_alert(ev.fingerprint, status, ev.ts, ev.alarm_id, ev.alarm_ts, auto_at, payload, now)
                 if not silent:
-                    self._enqueue(ev.fingerprint, ev.payload, now, stats)
+                    self._enqueue(ev.fingerprint, payload, now, stats)
             else:
                 if not row or row["status"] == "resolved" or ev.ts < row["last_ts"]:
                     continue        # never post a recovery we never posted a firing for
@@ -170,6 +181,34 @@ class Poller:
             st.delete(key)
             self._enqueue(row["fingerprint"], resolved_payload(firing, now, "auto_corrected"), now, stats)
             log.info("self-corrected %s: Mist reports the device connected", row["fingerprint"])
+
+    def _lookup_device_reason(self, mac, alarm_ts):
+        """Fetch per-device Mist events near alarm_ts and return 'AP_DISCONNECTED: <why>' or ''.
+        Prefers an explicit reason/text field on a disconnect-type event closest to the alarm time."""
+        if not mac:
+            return ""
+        try:
+            events = self.mist.search_device_events(mac, alarm_ts - 300, alarm_ts + 60, limit=20)
+        except Exception as e:
+            log.warning("device-event lookup failed for %s: %s", mac, e)
+            return ""
+        best = None
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            etype = str(ev.get("type", "")).upper()
+            if "DISCONNECT" not in etype and "DOWN" not in etype and "REBOOT" not in etype:
+                continue
+            text = (ev.get("reason") or ev.get("text") or ev.get("desc") or "").strip()
+            if not text:
+                continue
+            ets = ev.get("timestamp") or ev.get("time") or alarm_ts
+            dist = abs(int(ets) - int(alarm_ts))
+            if best is None or dist < best[0]:
+                best = (dist, etype, text)
+        if not best:
+            return ""
+        return ("%s: %s" % (best[1], best[2]))[:200]
 
     def _enqueue(self, fingerprint, payload, now, stats):
         self.state.enqueue(fingerprint, payload, now)
