@@ -158,17 +158,14 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(e1.payload["labels"]["mist_device"], "AP-ONE")
         self.assertEqual(e1.payload["labels"]["mist_model"], "AP45")
         self.assertEqual(e2.payload["labels"]["mist_ip"], "n/a")
-<<<<<<< HEAD
         self.assertEqual(e1.payload["ip"], "10.1.2.3")
         self.assertEqual((e1.payload["hostname"], e1.payload["device"]), ("AP-ONE", "AP-ONE"))
         self.assertEqual(e1.payload["mac"], AP1)
         self.assertNotIn("ip", e2.payload)
-=======
         self.assertEqual(e1.payload["labels"]["mist_firmware"], "0.14.1")
         self.assertEqual(e1.payload["labels"]["mist_last_seen"][:10], "2026-09-21")
         self.assertEqual(e2.payload["labels"]["mist_last_seen"], "n/a")
         self.assertEqual(e2.payload["labels"]["mist_model"], "n/a")
->>>>>>> origin/main
         self.assertEqual(e2.payload["labels"]["mist_device"], AP2)
 
     def test_device_lookup_failure_is_not_fatal(self):
