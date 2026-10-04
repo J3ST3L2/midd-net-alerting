@@ -32,6 +32,9 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -67,6 +70,9 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -101,6 +107,9 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -128,6 +137,9 @@ workflow:
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
+                  short: false
+                - title: Reason
+                  value: "{{ alert.reason }}"
                   short: false
                 - title: IP
                   value: "{{ alert.ip }}"

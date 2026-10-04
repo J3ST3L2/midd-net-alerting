@@ -5,6 +5,21 @@
     $firedAt = \App\Models\AlertLog::find($alert->id)?->time_logged?->format('Y-m-d H:i:s') ?? $alert->timestamp;
     $vendorIcon = $device?->logo();
     $keepName = trim($deviceName . ' - ' . $ruleName);
+
+    // "Reason": the specific fault(s) LibreNMS saw, else the rule's own message, else the rule name.
+    $faultLines = [];
+    if (!empty($faults) && is_array($faults)) {
+        foreach ($faults as $f) {
+            if (is_array($f)) {
+                // Common keys across checks: 'string' is the human summary, else join scalars.
+                if (!empty($f['string'])) { $faultLines[] = (string) $f['string']; }
+                elseif (!empty($f['msg'])) { $faultLines[] = (string) $f['msg']; }
+            } elseif (is_string($f) && $f !== '') { $faultLines[] = $f; }
+        }
+    }
+    $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) :
+              (!empty($msg) ? trim((string) $msg) : $ruleName);
+    $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
 @endphp
 [
 {
@@ -24,6 +39,7 @@
   "location": {!! json_encode($alert->location) !!},
   "rule": {!! json_encode($ruleName) !!},
   "summary": {!! json_encode($ruleName) !!},
+  "reason": {!! json_encode($reason) !!},
   "vendor_icon": {!! json_encode($vendorIcon) !!},
   "fired": {!! json_encode($firedAt) !!},
   "resolved": {!! $alert->state == 0 ? json_encode($alert->timestamp) : 'null' !!},
