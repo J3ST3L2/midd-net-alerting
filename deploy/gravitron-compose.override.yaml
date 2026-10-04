@@ -3,6 +3,19 @@ services:
     environment:
       KEEP_WORKFLOWS_DIRECTORY: /config/workflows
       KEEP_PROVIDERS_DIRECTORY: /config/providers
+      # Authentication (overrides AUTH_TYPE: NOAUTH in /opt/stacks/keep/compose.yaml).
+      # Secrets come from /opt/stacks/keep/.env (root-only, not in Git). The ":?" form makes
+      # compose refuse to start with a clear error if one is missing, instead of running open or broken.
+      AUTH_TYPE: DB
+      KEEP_JWT_SECRET: ${KEEP_JWT_SECRET:?set KEEP_JWT_SECRET in /opt/stacks/keep/.env}
+      KEEP_DEFAULT_USERNAME: ${KEEP_DEFAULT_USERNAME:?set KEEP_DEFAULT_USERNAME in /opt/stacks/keep/.env}
+      KEEP_DEFAULT_PASSWORD: ${KEEP_DEFAULT_PASSWORD:?set KEEP_DEFAULT_PASSWORD in /opt/stacks/keep/.env}
     volumes:
       - /opt/stacks/keep-config/keep/workflows:/config/workflows:ro
       - /opt/stacks/keep/provider-config:/config/providers:ro
+
+  keep-frontend:
+    environment:
+      AUTH_TYPE: DB
+      # Login cookies/redirects must use https; the base compose file has http://.
+      NEXTAUTH_URL: https://keep.middlebury.edu

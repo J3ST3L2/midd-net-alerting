@@ -70,3 +70,24 @@ KEEP_WORKFLOWS_DIRECTORY=/config/workflows
 ```
 
 Keep imports provisioned workflows from this directory on backend startup.
+
+## Authentication (DB mode)
+
+The override sets `AUTH_TYPE: DB` on the backend and frontend. It needs three values in
+`/opt/stacks/keep/.env` (root-only, never in Git): `KEEP_JWT_SECRET`, `KEEP_DEFAULT_USERNAME`,
+`KEEP_DEFAULT_PASSWORD`. Compose refuses to start without them. Avoid `$` in the password.
+
+Once auth is on, every sender must send an API key header, `X-API-KEY: <key>`, created in Keep under
+Settings > Users and Access > API Keys (one key per sender so each can be revoked alone):
+
+| Sender | Where the key goes |
+|---|---|
+| LibreNMS | Keep Production transport headers: `X-API-KEY=<key>` |
+| mist-poller | `/opt/stacks/mist-poller/secrets/keep-api-key` (see deploy/mist-poller/README.md) |
+
+Check: `curl -s -o /dev/null -w '%{http_code}
+' -X POST https://keep.middlebury.edu/backend/alerts/event -d '{}'`
+should print 401 or 403, and the same request with `-H 'X-API-KEY: <key>'` should not.
+
+Rollback: remove the three auth lines from the override (or set `AUTH_TYPE: NOAUTH`) and recreate
+`keep-backend` and `keep-frontend`.
