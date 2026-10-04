@@ -32,9 +32,6 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
-                - title: Reason
-                  value: "{{ alert.reason }}"
-                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -69,9 +66,6 @@ workflow:
               fields:
                 - title: Issue
                   value: "{{ alert.rule }}"
-                  short: false
-                - title: Reason
-                  value: "{{ alert.reason }}"
                   short: false
                 - title: IP
                   value: "{{ alert.ip }}"
@@ -113,6 +107,12 @@ workflow:
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
+                - title: Hardware
+                  value: "{{ alert.hardware }}"
+                  short: true
+                - title: Software
+                  value: "{{ alert.software }}"
+                  short: true
                 - title: Started
                   value: "{{ alert.fired }}"
                   short: true
@@ -143,6 +143,12 @@ workflow:
                   short: false
                 - title: IP
                   value: "{{ alert.ip }}"
+                  short: true
+                - title: Hardware
+                  value: "{{ alert.hardware }}"
+                  short: true
+                - title: Software
+                  value: "{{ alert.software }}"
                   short: true
                 - title: Started
                   value: "{{ alert.fired }}"

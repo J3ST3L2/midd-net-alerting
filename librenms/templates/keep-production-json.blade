@@ -6,20 +6,33 @@
     $vendorIcon = $device?->logo();
     $keepName = trim($deviceName . ' - ' . $ruleName);
 
-    // "Reason": the specific fault(s) LibreNMS saw, else the rule's own message, else the rule name.
+    // Faults live on the alert object, not as a bare $faults. Join a few human lines.
     $faultLines = [];
-    if (!empty($faults) && is_array($faults)) {
-        foreach ($faults as $f) {
+    $rawFaults = $alert->faults ?? ($faults ?? []);     // tolerate either shape across LibreNMS versions
+    if (is_array($rawFaults)) {
+        foreach ($rawFaults as $f) {
             if (is_array($f)) {
-                // Common keys across checks: 'string' is the human summary, else join scalars.
-                if (!empty($f['string'])) { $faultLines[] = (string) $f['string']; }
-                elseif (!empty($f['msg'])) { $faultLines[] = (string) $f['msg']; }
-            } elseif (is_string($f) && $f !== '') { $faultLines[] = $f; }
+                foreach (['string', 'msg', 'description'] as $k) {
+                    if (!empty($f[$k])) { $faultLines[] = trim((string) $f[$k]); break; }
+                }
+            } elseif (is_string($f) && $f !== '') {
+                $faultLines[] = trim($f);
+            }
         }
     }
-    $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) :
-              (!empty($msg) ? trim((string) $msg) : $ruleName);
+
+    // On recovery there is no fault; LibreNMS cards do not need a reason line there.
+    if ($alert->state == 0) {
+        $reason = '';
+    } else {
+        $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) :
+                  (!empty($msg) ? trim((string) $msg) : $ruleName);
+    }
     $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
+
+    // Device context (what the thing is), always safe to send.
+    $hardware = $device?->hardware ?: '';
+    $osVersion = trim(($device?->os ?: '') . ' ' . ($device?->version ?: ''));
 @endphp
 [
 {
@@ -40,6 +53,8 @@
   "rule": {!! json_encode($ruleName) !!},
   "summary": {!! json_encode($ruleName) !!},
   "reason": {!! json_encode($reason) !!},
+  "hardware": {!! json_encode($hardware) !!},
+  "software": {!! json_encode($osVersion) !!},
   "vendor_icon": {!! json_encode($vendorIcon) !!},
   "fired": {!! json_encode($firedAt) !!},
   "resolved": {!! $alert->state == 0 ? json_encode($alert->timestamp) : 'null' !!},
