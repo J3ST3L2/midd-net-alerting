@@ -38,14 +38,22 @@ Each alert carries `labels.mist_category` (`wifi` or `infra`); the Keep workflow
 
 ## Install
 
-1. The Mist token file already exists from the discovery step. Keep on Gravitron runs in
-   `NO_AUTH` mode (same as LibreNMS), so no Keep API key is needed.
+1. The Mist token file already exists from the discovery step. Keep's API key is optional: while
+   Keep runs in `NO_AUTH` mode no key is needed. Once Keep authentication is enabled, create an API key
+   in Keep (Settings > Users and Access > API Keys) and store it where the poller reads it:
+
+```bash
+sudo sh -c 'umask 077; printf "Keep API key: "; read -rs T; echo; printf %s "$T" > /opt/stacks/mist-poller/secrets/keep-api-key'
+sudo chown 10001:10001 /opt/stacks/mist-poller/secrets/keep-api-key && sudo chmod 400 /opt/stacks/mist-poller/secrets/keep-api-key
+sudo docker compose up -d --force-recreate
+```
 
 2. The container runs as uid 10001, so give it the files and state dir:
 
 ```bash
 sudo install -d -m 700 -o 10001 -g 10001 /opt/stacks/mist-poller/state/poller
-sudo chown 10001:10001 /opt/stacks/mist-poller/secrets/mist-api-token
+sudo chown 10001:10001 /opt/stacks/mist-poller/secrets /opt/stacks/mist-poller/secrets/mist-api-token
+sudo chmod 500 /opt/stacks/mist-poller/secrets
 sudo chmod 400 /opt/stacks/mist-poller/secrets/mist-api-token
 ```
 
