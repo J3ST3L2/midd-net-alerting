@@ -82,6 +82,21 @@ sudo sed -i 's/^DRY_RUN=.*/DRY_RUN=false/' .env
 sudo docker compose up -d
 ```
 
+## Refresh existing Slack cards
+
+After adding fields (IP, reason, ...), cards that are already open can be updated in place.
+Resolved cards cannot: Keep forgets the Slack message once an alert resolves.
+
+```bash
+cd /opt/stacks/keep-config/deploy/mist-poller
+sudo docker compose exec mist-poller python -m mist_poller.refresh --dry-run   # preview
+sudo docker compose exec mist-poller python -m mist_poller.refresh             # do it
+```
+
+It re-sends each open alert with a `mist_refresh` label; the `slack-refresh-*` workflow actions
+edit the existing card instead of posting a new one. Keep's backend must have been restarted
+after the workflow files were updated.
+
 ## Health
 
 ```bash
