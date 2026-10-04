@@ -174,6 +174,17 @@ class NormalizeTests(unittest.TestCase):
         p.run_cycle()
         self.assertEqual(keep.posted[0]["labels"]["mist_ip"], "n/a")
 
+    def test_reason_from_alarm_marvis_or_default(self):
+        def r(t, **kw):
+            return extract(alarm("a", t, **kw), self.cfg, {})[0].payload["labels"]["mist_reason"]
+        self.assertEqual(r("vc_master_changed", switches=[SW1], reasons=["Master switched", "x"]),
+                         "Master switched; x")
+        self.assertEqual(r("port_flap", status="open", impacted_entities=[
+            {"entity_mac": SW1, "event_name": "port_flap", "port_id": "ge-0/0/4"}]),
+            "port flap on port ge-0/0/4")
+        self.assertIn("lost its connection", r("device_down", aps=[AP1]))
+        self.assertEqual(r("sw_ospf_neighbor_adjacency_failed", switches=[SW1]), "n/a")
+
     def test_marvis_identity_from_impacted_entities(self):
         a = alarm("m1", "port_flap", status="open", group="marvis", severity="warn",
                   impacted_entities=[{"entity_mac": "5C:5B:35:AA:00:09", "entity_name": "SW-DAVIS-1",
