@@ -17,6 +17,8 @@
     "rule": "Device Down",
     "summary": "Device Down",
     "reason": "ICMP ping failed; SNMP timeout",
+    "hardware": "Juniper EX4400-48MP",
+    "software": "junos 24.4R2-S4.10",
     "fired": "2026-09-27 06:45:46",
     "resolved": null,
     "duration": null,
