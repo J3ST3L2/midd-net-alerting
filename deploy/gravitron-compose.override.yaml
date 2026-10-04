@@ -10,6 +10,9 @@ services:
       KEEP_JWT_SECRET: ${KEEP_JWT_SECRET:?set KEEP_JWT_SECRET in /opt/stacks/keep/.env}
       KEEP_DEFAULT_USERNAME: ${KEEP_DEFAULT_USERNAME:?set KEEP_DEFAULT_USERNAME in /opt/stacks/keep/.env}
       KEEP_DEFAULT_PASSWORD: ${KEEP_DEFAULT_PASSWORD:?set KEEP_DEFAULT_PASSWORD in /opt/stacks/keep/.env}
+      # Keep only sets the default user's password on first creation. Set this to true in .env for one
+      # restart to reset an existing default user (e.g. the 'keep' user left from NOAUTH mode), then remove it.
+      KEEP_FORCE_RESET_DEFAULT_PASSWORD: ${KEEP_FORCE_RESET_DEFAULT_PASSWORD:-false}
     volumes:
       - /opt/stacks/keep-config/keep/workflows:/config/workflows:ro
       - /opt/stacks/keep/provider-config:/config/providers:ro

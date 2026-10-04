@@ -91,3 +91,7 @@ should print 401 or 403, and the same request with `-H 'X-API-KEY: <key>'` shoul
 
 Rollback: remove the three auth lines from the override (or set `AUTH_TYPE: NOAUTH`) and recreate
 `keep-backend` and `keep-frontend`.
+
+Note: if Keep previously ran in NOAUTH mode it already has a user named `keep` and will not create a new
+default user. Set `KEEP_DEFAULT_USERNAME=keep` and `KEEP_FORCE_RESET_DEFAULT_PASSWORD=true` in `.env` for one
+restart so Keep resets that user's password, then delete the force line and restart again.
