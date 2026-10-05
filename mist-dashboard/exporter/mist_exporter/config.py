@@ -26,6 +26,8 @@ class Config:
 
     devices_interval: int = 60        # org device stats: fleet health, clients, load
     alarms_interval: int = 120        # org alarms
+    clients_interval: int = 60        # wireless client counts (site stats + clients/count)
+    client_window: str = "10m"        # "currently connected" = seen in this window
     sites_interval: int = 900         # site id -> name map
     alarm_window_hours: int = 24
     page_limit: int = 100
@@ -43,6 +45,8 @@ def load():
         listen_port=int(env("LISTEN_PORT", "9877")),
         devices_interval=int(env("DEVICES_INTERVAL_S", "60")),
         alarms_interval=int(env("ALARMS_INTERVAL_S", "120")),
+        clients_interval=int(env("CLIENTS_INTERVAL_S", "60")),
+        client_window=env("CLIENT_WINDOW", "10m").strip(),
         sites_interval=int(env("SITES_INTERVAL_S", "900")),
         alarm_window_hours=int(env("ALARM_WINDOW_HOURS", "24")),
         page_limit=int(env("PAGE_LIMIT", "100")),

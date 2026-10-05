@@ -27,8 +27,9 @@ class FakeClient:
 def exported_metric_names():
     """Every family name the exporter can emit, taken from its own # TYPE lines."""
     text = Collector(Config(), FakeClient()).render()
-    from mist_exporter.metrics import alarm_families, device_families
-    names = {f.name for f in device_families([], {}) + alarm_families([], {})}
+    from mist_exporter.metrics import alarm_families, device_families, wireless_families
+    names = {f.name for f in device_families([], {}) + alarm_families([], {})
+             + wireless_families([], {}, [], [], [], [])}
     return names | set(re.findall(r"^# TYPE (\S+)", text, re.M))
 
 

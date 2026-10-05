@@ -8,8 +8,6 @@ import re
 
 Family = collections.namedtuple("Family", "name help type samples")
 
-BANDS = (("band_24", "2.4"), ("band_5", "5"), ("band_6", "6"))
-
 
 def _num(v):
     """Real numbers only (bool is an int subclass in Python, so exclude it)."""
@@ -36,18 +34,12 @@ def _stat_block(row, key):
 
 
 def cpu_percent(row):
-    v = _num(row.get("cpu_util"))                      # APs
-    if v is not None:
-        return v
-    idle = _num(_stat_block(row, "cpu_stat").get("idle"))   # switches, gateways
+    idle = _num(_stat_block(row, "cpu_stat").get("idle"))   # switches, gateways (APs report none)
     return None if idle is None else max(0.0, 100.0 - idle)
 
 
 def memory_percent(row):
-    used, total = _num(row.get("mem_used_kb")), _num(row.get("mem_total_kb"))   # APs
-    if used is not None and total:
-        return 100.0 * used / total
-    return _num(_stat_block(row, "memory_stat").get("usage"))   # switches, gateways
+    return _num(_stat_block(row, "memory_stat").get("usage"))
 
 
 def poe_watts(row):
@@ -65,50 +57,37 @@ def poe_watts(row):
     return None if draw is None and budget is None else (draw, budget)
 
 
+def _identity(row, sites):
+    mac = _mac(row.get("mac"))
+    return {"site": _site(sites, row.get("site_id")), "type": str(row.get("type") or "unknown"),
+            "name": str(row.get("name") or mac), "mac": mac, "model": str(row.get("model") or "")}
+
+
 def device_families(rows, sites):
     f = {n: Family(n, h, t, []) for n, h, t in (
         ("mist_device_up", "1 if Mist reports the device connected.", "gauge"),
         ("mist_device_info", "Device identity; value is always 1.", "gauge"),
         ("mist_device_uptime_seconds", "Device uptime.", "gauge"),
         ("mist_device_last_seen_timestamp_seconds", "Unix time Mist last heard from the device.", "gauge"),
-        ("mist_device_cpu_percent", "CPU utilization.", "gauge"),
-        ("mist_device_memory_percent", "Memory utilization.", "gauge"),
-        ("mist_ap_clients", "Wireless clients on the AP.", "gauge"),
-        ("mist_ap_band_clients", "Wireless clients on the AP, per radio band.", "gauge"),
-        ("mist_ap_power_constrained", "1 if the AP is running power-constrained.", "gauge"),
+        ("mist_device_cpu_percent", "CPU utilization (switches and gateways).", "gauge"),
+        ("mist_device_memory_percent", "Memory utilization (switches and gateways).", "gauge"),
         ("mist_switch_poe_draw_watts", "PoE power drawn by the switch.", "gauge"),
         ("mist_switch_poe_budget_watts", "PoE power budget of the switch.", "gauge"))}
 
     for row in rows:
-        mac = _mac(row.get("mac"))
-        if not mac:
+        if not _mac(row.get("mac")):
             continue
-        base = {"site": _site(sites, row.get("site_id")), "type": str(row.get("type") or "unknown"),
-                "name": str(row.get("name") or mac), "mac": mac, "model": str(row.get("model") or "")}
-
+        base = _identity(row, sites)
         f["mist_device_up"].samples.append((base, 1.0 if row.get("status") == "connected" else 0.0))
         f["mist_device_info"].samples.append(
             (dict(base, version=str(row.get("version") or ""), ip=str(row.get("ip") or "")), 1.0))
-
         for fam, value in (("mist_device_uptime_seconds", _num(row.get("uptime"))),
                            ("mist_device_last_seen_timestamp_seconds", _num(row.get("last_seen"))),
                            ("mist_device_cpu_percent", cpu_percent(row)),
                            ("mist_device_memory_percent", memory_percent(row))):
             if value is not None:
                 f[fam].samples.append((base, value))
-
-        if base["type"] == "ap":
-            clients = _num(row.get("num_clients"))
-            if clients is not None:
-                f["mist_ap_clients"].samples.append((base, clients))
-            radios = row.get("radio_stat") if isinstance(row.get("radio_stat"), dict) else {}
-            for key, band in BANDS:
-                n = _num((radios.get(key) or {}).get("num_clients")) if isinstance(radios.get(key), dict) else None
-                if n is not None:
-                    f["mist_ap_band_clients"].samples.append((dict(base, band=band), n))
-            if isinstance(row.get("power_constrained"), bool):
-                f["mist_ap_power_constrained"].samples.append((base, 1.0 if row["power_constrained"] else 0.0))
-        elif base["type"] == "switch":
+        if base["type"] == "switch":
             poe = poe_watts(row)
             if poe:
                 if poe[0] is not None:
@@ -116,6 +95,37 @@ def device_families(rows, sites):
                 if poe[1] is not None:
                     f["mist_switch_poe_budget_watts"].samples.append((base, poe[1]))
     return list(f.values())
+
+
+def wireless_families(devices, sites, site_stats, ap_counts, band_counts, ssid_counts):
+    """Client counts. Per-site comes from org site stats (exact); per-AP, band and SSID come from
+    the org clients/count endpoint. That endpoint caps its result list, so per-AP counts can miss
+    the quietest APs: an absent AP means "not in the top results", not zero."""
+    aps = {_mac(r.get("mac")): _identity(r, sites) for r in devices
+           if r.get("type") == "ap" and _mac(r.get("mac"))}
+    site_clients = Family("mist_site_clients", "Wireless clients currently on the site.", "gauge", [])
+    for s in site_stats:
+        n = _num(s.get("num_clients"))
+        if n is not None and s.get("name"):
+            site_clients.samples.append(({"site": str(s["name"])}, n))
+    ap_clients = Family("mist_ap_clients", "Wireless clients on the AP (best effort, see exporter docs).",
+                        "gauge", [])
+    for row in ap_counts:
+        base, n = aps.get(_mac(row.get("last_ap"))), _num(row.get("count"))
+        if base and n is not None:
+            ap_clients.samples.append((base, n))
+
+    def grouped(name, help_, rows, key, label):
+        fam = Family(name, help_, "gauge", [])
+        for r in rows:
+            n = _num(r.get("count"))
+            if n is not None and r.get(key) not in (None, ""):
+                fam.samples.append(({label: str(r[key])}, n))
+        return fam
+
+    return [site_clients, ap_clients,
+            grouped("mist_clients_by_band", "Wireless clients per radio band.", band_counts, "band", "band"),
+            grouped("mist_clients_by_ssid", "Wireless clients per SSID.", ssid_counts, "last_ssid", "ssid")]
 
 
 def alarm_families(alarms, sites):

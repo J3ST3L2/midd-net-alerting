@@ -10,17 +10,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
-from mist_exporter.metrics import alarm_families, device_families, render  # noqa: E402
 from mist_exporter.main import make_handler  # noqa: E402
+from mist_exporter.metrics import alarm_families, device_families, render, wireless_families  # noqa: E402
 from mist_exporter.mist_api import MistError  # noqa: E402
 
 SITES = {"s1": "Davis Library", "s2": 'Atwater "Hall"'}
 
+# Shapes follow what Middlebury's org returns: APs carry status/uptime/version only; switches carry
+# cpu_stat.idle, memory_stat.usage and per-module PoE.
 AP = {"mac": "5C:5B:35:00:00:01", "type": "ap", "site_id": "s1", "name": "ap-davis-1", "model": "AP45",
       "status": "connected", "version": "0.14.1", "ip": "10.0.0.5", "uptime": 86400, "last_seen": 1790000000,
-      "cpu_util": 12, "mem_used_kb": 250, "mem_total_kb": 1000, "num_clients": 14,
-      "radio_stat": {"band_24": {"num_clients": 4}, "band_5": {"num_clients": 10}, "band_6": None},
-      "power_constrained": False}
+      "cpu_stat": None, "memory_stat": None, "module_stat": None}
 SWITCH = {"mac": "5c5b35aa0001", "type": "switch", "site_id": "s2", "name": "sw-atwater", "model": "EX4100",
           "status": "disconnected", "cpu_stat": {"idle": 80}, "memory_stat": {"usage": 41.5},
           "module_stat": [{"poe": {"power_draw": 120.5, "max_power": 740}},
@@ -41,30 +41,51 @@ class DeviceMetrics(unittest.TestCase):
         labels = samples(self.fams, "mist_device_up")[0][0]
         self.assertEqual((labels["site"], labels["mac"]), ("Davis Library", "5c5b35000001"))
 
-    def test_ap_load_and_clients(self):
-        self.assertEqual(samples(self.fams, "mist_ap_clients")[0][1], 14.0)
-        self.assertEqual({l["band"]: v for l, v in samples(self.fams, "mist_ap_band_clients")},
-                         {"2.4": 4.0, "5": 10.0})          # null 6 GHz block yields no sample
-        cpu = {l["name"]: v for l, v in samples(self.fams, "mist_device_cpu_percent")}
-        mem = {l["name"]: v for l, v in samples(self.fams, "mist_device_memory_percent")}
-        self.assertEqual(cpu, {"ap-davis-1": 12.0, "sw-atwater": 20.0})
-        self.assertEqual(mem, {"ap-davis-1": 25.0, "sw-atwater": 41.5})
+    def test_switch_load(self):
+        self.assertEqual({l["name"]: v for l, v in samples(self.fams, "mist_device_cpu_percent")},
+                         {"sw-atwater": 20.0})
+        self.assertEqual({l["name"]: v for l, v in samples(self.fams, "mist_device_memory_percent")},
+                         {"sw-atwater": 41.5})
+
+    def test_ap_with_null_stats_makes_no_load_samples(self):
+        names = {l["name"] for l, _ in samples(self.fams, "mist_device_cpu_percent")}
+        self.assertNotIn("ap-davis-1", names)
 
     def test_switch_poe_sums_modules(self):
         self.assertEqual(samples(self.fams, "mist_switch_poe_draw_watts")[0][1], 150.5)
         self.assertEqual(samples(self.fams, "mist_switch_poe_budget_watts")[0][1], 1480.0)
 
-    def test_missing_stats_make_no_samples(self):
-        fams = device_families([{"mac": "aa", "type": "gateway", "status": "connected"}], {})
-        self.assertEqual(samples(fams, "mist_device_cpu_percent"), [])
-        self.assertEqual(samples(fams, "mist_device_up")[0][0]["site"], "unassigned")
+    def test_disconnected_ap_with_null_fields(self):
+        gone = dict(AP, mac="aa", ip=None, last_seen=None, uptime=None, version=None)
+        fams = device_families([gone], SITES)
+        self.assertEqual(samples(fams, "mist_device_uptime_seconds"), [])
+        self.assertEqual(samples(fams, "mist_device_info")[0][0]["version"], "")
 
     def test_rows_without_mac_skipped(self):
         self.assertEqual(samples(device_families([{"type": "ap"}], {}), "mist_device_up"), [])
 
     def test_bool_is_not_a_number(self):
-        fams = device_families([dict(AP, uptime=True, cpu_util=True)], SITES)
+        fams = device_families([dict(AP, uptime=True)], SITES)
         self.assertEqual(samples(fams, "mist_device_uptime_seconds"), [])
+
+
+class WirelessMetrics(unittest.TestCase):
+    def test_site_ap_band_ssid(self):
+        fams = wireless_families(
+            [AP, SWITCH], SITES,
+            site_stats=[{"name": "Davis Library", "num_clients": 214}, {"num_clients": 5}],
+            ap_counts=[{"last_ap": "5c5b35000001", "count": 14}, {"last_ap": "ffffffffffff", "count": 3}],
+            band_counts=[{"band": "5", "count": 900}, {"band": "24", "count": 300}],
+            ssid_counts=[{"last_ssid": "eduroam", "count": 1000}, {"last_ssid": "", "count": 2}])
+        self.assertEqual(samples(fams, "mist_site_clients"), [({"site": "Davis Library"}, 214.0)])
+        ap = samples(fams, "mist_ap_clients")                      # unknown AP and non-AP rows dropped
+        self.assertEqual([(l["name"], v) for l, v in ap], [("ap-davis-1", 14.0)])
+        self.assertEqual({l["band"]: v for l, v in samples(fams, "mist_clients_by_band")}, {"5": 900.0, "24": 300.0})
+        self.assertEqual(samples(fams, "mist_clients_by_ssid"), [({"ssid": "eduroam"}, 1000.0)])
+
+    def test_empty_inputs(self):
+        fams = wireless_families([], {}, [], [], [], [])
+        self.assertEqual([f.samples for f in fams], [[], [], [], []])
 
 
 class AlarmMetrics(unittest.TestCase):
@@ -87,7 +108,7 @@ class Rendering(unittest.TestCase):
                       'site="Davis Library",type="ap"} 1', text)
         self.assertIn('site="Atwater \\"Hall\\""', text)
         self.assertTrue(text.endswith("\n"))
-        self.assertNotIn("1.0\n", text.replace("25.0", ""))   # whole numbers render as ints
+        self.assertIn("} 1\n", text)                           # whole numbers render without ".0"
 
 
 class FakeClient:
@@ -103,6 +124,14 @@ class FakeClient:
         if self.fail:
             raise self.fail
         return list(self.devices)
+
+    def list_site_stats(self):
+        return [{"name": "Davis Library", "num_clients": 214}]
+
+    def client_counts(self, distinct, duration):
+        return {"ap": [{"last_ap": "5c5b35000001", "count": 14}],
+                "band": [{"band": "5", "count": 9}],
+                "ssid": [{"last_ssid": "eduroam", "count": 9}]}[distinct]
 
     def search_alarms(self, start, end):
         return list(self.alarms)
@@ -125,7 +154,9 @@ class CollectorBehavior(unittest.TestCase):
         self.assertFalse(self.c.healthy())
         self.c.run_due()
         self.assertTrue(self.c.healthy())
-        self.assertIn('mist_ap_clients{', self.c.render())
+        text = self.c.render()
+        self.assertIn('mist_site_clients{site="Davis Library"} 214', text)
+        self.assertIn('mist_ap_clients{', text)
 
     def test_scrape_does_not_call_mist(self):
         self.c.run_due()
@@ -142,6 +173,14 @@ class CollectorBehavior(unittest.TestCase):
         text = self.c.render()
         self.assertIn('mist_device_up{', text)                       # old data still served
         self.assertIn('mist_exporter_errors_total{source="devices"} 1', text)
+
+    def test_one_failing_source_does_not_block_the_others(self):
+        self.client.client_counts = lambda *a: (_ for _ in ()).throw(MistError("bad", status=400))
+        self.c.run_due()
+        text = self.c.render()
+        self.assertIn('mist_exporter_errors_total{source="clients"} 1', text)
+        self.assertIn('mist_site_clients{site="Davis Library"} 214', text)
+        self.assertTrue(self.c.healthy())
 
     def test_rate_limit_retry_after_is_honoured(self):
         self.c.run_due()

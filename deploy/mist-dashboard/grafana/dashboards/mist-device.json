@@ -731,19 +731,19 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Access points only.",
+      "description": "Access points only. Missing when the AP is not among the busiest ~1000.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 18,
+            "fillOpacity": 8,
             "lineWidth": 2,
             "showPoints": "never",
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             }
           },
           "min": 0,
@@ -784,13 +784,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_ap_band_clients{name=\"$device\"}",
+          "expr": "mist_ap_clients{name=\"$device\"}",
           "format": "time_series",
-          "legendFormat": "{{band}} GHz",
+          "legendFormat": "clients",
           "refId": "A"
         }
       ],
-      "title": "Clients by band",
+      "title": "Clients",
       "type": "timeseries"
     },
     {

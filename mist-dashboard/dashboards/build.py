@@ -160,7 +160,7 @@ def overview():
              "Unresolved critical alarm records in the last 24 hours. Device down/up pairs are not "
              "closed by Mist, so use Disconnected for current device state.",
              thresholds=steps((GREEN, None), (RED, 1))),
-        stat("Wireless clients", 16, 0, 4, 'sum(mist_ap_clients%s)' % SITE, thresholds=steps((BLUE, None))),
+        stat("Wireless clients", 16, 0, 4, 'sum(mist_site_clients%s)' % SITE, thresholds=steps((BLUE, None))),
         stat("Data age", 20, 0, 4, FRESH, "Seconds since the exporter last refreshed device data from Mist.",
              unit="s", thresholds=steps((GREEN, None), (AMBER, 180), (RED, 600)), color_mode="background"),
 
@@ -210,34 +210,41 @@ def overview():
 
 def wireless():
     clients = 'mist_ap_clients%s' % SITE
+    aps = 'mist_device_up{type="ap",site=~"$site"}'
     p = [
-        stat("Clients", 0, 0, 6, 'sum(%s)' % clients),
-        stat("Access points", 6, 0, 6, 'count(mist_ap_clients%s)' % SITE, "APs reporting client counts."),
-        stat("Busiest AP", 12, 0, 6, 'max(%s)' % clients, "Highest client count on a single AP."),
-        stat("Power-constrained APs", 18, 0, 6, 'sum(mist_ap_power_constrained%s) or vector(0)' % SITE,
-             "APs running reduced because their switch port cannot supply full power.",
-             thresholds=steps((GREEN, None), (AMBER, 1)), color_mode="background"),
+        stat("Clients", 0, 0, 6, 'sum(mist_site_clients%s)' % SITE, "Wireless clients seen in the last 10 minutes."),
+        stat("Access points", 6, 0, 6, 'count(%s)' % aps),
+        stat("APs offline", 12, 0, 6, 'count(%s == 0) or vector(0)' % aps,
+             thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
+        stat("Busiest AP", 18, 0, 6, 'max(%s)' % clients,
+             "Highest client count on a single AP. Per-AP counts cover the busiest ~1000 APs."),
 
         timeseries("Clients over time", 0, 4, 16, 9,
-                   [target('sum by (site) (%s)' % clients, "{{site}}")], "Wireless clients per site.", stack=True),
+                   [target('mist_site_clients%s' % SITE, "{{site}}")], "Wireless clients per site.", stack=True),
         timeseries("Clients by band", 16, 4, 8, 9,
-                   [target('sum by (band) (mist_ap_band_clients%s)' % SITE, "{{band}} GHz")],
-                   "Clients per radio band across the selected sites.", stack=True),
+                   [target('mist_clients_by_band', "{{band}}")],
+                   "Whole org, not filtered by site.", stack=True),
 
         bargauge("Busiest APs", 0, 13, 12, 10, 'topk(15, %s)' % clients, "{{name}} ({{site}})",
-                 "The 15 APs with the most clients right now.", thresholds=steps((BLUE, None), (AMBER, 40), (RED, 60))),
-        bargauge("Clients by site", 12, 13, 12, 10, 'sort_desc(sum by (site) (%s))' % clients, "{{site}}",
+                 "The 15 APs with the most clients right now.",
+                 thresholds=steps((BLUE, None), (AMBER, 40), (RED, 60))),
+        bargauge("Clients by site", 12, 13, 12, 10, 'sort_desc(mist_site_clients%s)' % SITE, "{{site}}",
                  "Current clients per site."),
 
-        table("Power-constrained APs", 0, 23, 24, 6,
-              [target('mist_ap_power_constrained%s == 1' % SITE, fmt="table", instant=True)],
-              "Empty is good. Check the switch port PoE budget for anything listed.",
-              hide=("mac", "Value"), rename={"name": "AP", "site": "Site", "model": "Model", "type": "Type"},
-              order=["AP", "Site", "Model"]),
+        bargauge("Clients by SSID", 0, 23, 12, 8, 'sort_desc(mist_clients_by_ssid)', "{{ssid}}",
+                 "Whole org, not filtered by site."),
+        table("Offline access points", 12, 23, 12, 8,
+              [target('(time() - mist_device_last_seen_timestamp_seconds) and on(mac) (%s == 0)' % aps,
+                      fmt="table", instant=True)],
+              "Access points Mist reports as not connected, and how long since Mist last heard from them.",
+              hide=("mac", "type"), rename={"name": "AP", "site": "Site", "model": "Model", "Value": "Down for"},
+              order=["AP", "Site", "Model", "Down for"], sort="Down for",
+              overrides=[{"matcher": {"id": "byName", "options": "Down for"},
+                          "properties": [{"id": "unit", "value": "s"}]}]),
     ]
     link_series(p, "Busiest APs", DEVICE_FROM_SERIES)
     link_series(p, "Clients by site", SITE_FROM_SERIES)
-    link_columns(p, "Power-constrained APs", {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
+    link_columns(p, "Offline access points", {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
     return dashboard("mist-wireless", "Mist Wireless", p, [SITE_VAR], "Wireless client load across the Mist org.")
 
 
@@ -307,15 +314,14 @@ def site_view():
         stat("Devices", 0, 0, 5, 'count(mist_device_up%s)' % s),
         stat("Disconnected", 5, 0, 5, 'count(mist_device_up%s == 0) or vector(0)' % s,
              thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
-        stat("Wireless clients", 10, 0, 5, 'sum(mist_ap_clients%s)' % s),
+        stat("Wireless clients", 10, 0, 5, 'sum(mist_site_clients%s)' % s),
         stat("Critical alarms (24 h)", 15, 0, 5,
              'sum(mist_alarms{site="$site",state="open",severity="critical"}) or vector(0)',
              thresholds=steps((GREEN, None), (RED, 1))),
-        stat("Power-constrained APs", 20, 0, 4, 'sum(mist_ap_power_constrained%s) or vector(0)' % s,
-             thresholds=steps((GREEN, None), (AMBER, 1)), color_mode="background"),
+        stat("Access points", 20, 0, 4, 'count(mist_device_up{site="$site",type="ap"})'),
         devices,
         timeseries("Clients per AP", 0, 16, 12, 8,
-                   [target('mist_ap_clients%s' % s, "{{name}}")], "Wireless clients on each AP at this site.",
+                   [target('mist_ap_clients%s' % s, "{{name}}")], "Wireless clients on each AP at this site (covers the busiest ~1000 APs org-wide).",
                    stack=True),
         timeseries("CPU", 12, 16, 12, 8, [target('mist_device_cpu_percent%s' % s, "{{name}}")],
                    "CPU utilization of every device at this site.", unit="percent", max_=100),
@@ -360,8 +366,8 @@ def device_view():
                    unit="percent", max_=100),
         timeseries("Memory", 12, 11, 12, 8, [target('mist_device_memory_percent%s' % d, "Memory")],
                    unit="percent", max_=100),
-        timeseries("Clients by band", 0, 19, 12, 8,
-                   [target('mist_ap_band_clients%s' % d, "{{band}} GHz")], "Access points only.", stack=True),
+        timeseries("Clients", 0, 19, 12, 8, [target('mist_ap_clients%s' % d, "clients")],
+                   "Access points only. Missing when the AP is not among the busiest ~1000."),
         timeseries("Uptime", 12, 19, 12, 8, [target('mist_device_uptime_seconds%s' % d, "uptime")],
                    "A drop to zero is a reboot.", unit="s"),
         timeseries("PoE draw", 0, 27, 24, 8,
