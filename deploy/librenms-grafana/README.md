@@ -53,3 +53,13 @@ LibreNMS MariaDB  <--(read-only SELECT)--  Grafana (127.0.0.1:3001)
 - A commented `ifTrunk` filter in the edges query keeps only 802.1Q trunks; vendors populate it
   inconsistently (especially on LAG members), so confirm edges survive before enabling it.
 - If a location has missing or default coordinates, it is absent or misplaced here; fix it in LibreNMS.
+
+## Reverse proxy
+
+`nginx/librenms-grafana.conf` serves Grafana at `https://keep.middlebury.edu/netmap/`. Include it in the
+existing `server` block, then `sudo nginx -t && sudo systemctl reload nginx`. In `.env` set
+`GRAFANA_ROOT_URL=https://keep.middlebury.edu/netmap/` and `GRAFANA_COOKIE_SECURE=true`, then
+`sudo docker compose up -d`. The map is at `https://keep.middlebury.edu/netmap/d/midd-campus-netmap`.
+
+If you keep being asked to log in, the cause is almost always a Secure cookie over plain HTTP or a
+`GRAFANA_ROOT_URL` that does not match the address in the browser. Use the HTTPS URL above.
