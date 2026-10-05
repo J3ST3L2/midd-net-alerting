@@ -97,10 +97,11 @@ def device_families(rows, sites):
     return list(f.values())
 
 
-def wireless_families(devices, sites, site_stats, ap_counts, band_counts, ssid_counts):
-    """Client counts. Per-site comes from org site stats (exact); per-AP, band and SSID come from
-    the org clients/count endpoint. That endpoint caps its result list, so per-AP counts can miss
-    the quietest APs: an absent AP means "not in the top results", not zero."""
+def wireless_families(devices, sites, site_stats, ap_counts, site_breakdowns):
+    """Client counts. The per-site total comes from org site stats (Mist's own number); per-AP counts
+    from the org clients/count endpoint, which caps its list, so an absent AP means "not in the top
+    results", not zero; band and SSID breakdowns from per-site clients/count (site_breakdowns:
+    {site_id: {"band": rows, "ssid": rows}}), over the exporter's client window."""
     aps = {_mac(r.get("mac")): _identity(r, sites) for r in devices
            if r.get("type") == "ap" and _mac(r.get("mac"))}
     site_clients = Family("mist_site_clients", "Wireless clients currently on the site.", "gauge", [])
@@ -115,17 +116,16 @@ def wireless_families(devices, sites, site_stats, ap_counts, band_counts, ssid_c
         if base and n is not None:
             ap_clients.samples.append((base, n))
 
-    def grouped(name, help_, rows, key, label):
-        fam = Family(name, help_, "gauge", [])
-        for r in rows:
-            n = _num(r.get("count"))
-            if n is not None and r.get(key) not in (None, ""):
-                fam.samples.append(({label: str(r[key])}, n))
-        return fam
-
-    return [site_clients, ap_clients,
-            grouped("mist_clients_by_band", "Wireless clients per radio band.", band_counts, "band", "band"),
-            grouped("mist_clients_by_ssid", "Wireless clients per SSID.", ssid_counts, "last_ssid", "ssid")]
+    by_band = Family("mist_site_clients_by_band", "Wireless clients per site and radio band.", "gauge", [])
+    by_ssid = Family("mist_site_clients_by_ssid", "Wireless clients per site and SSID.", "gauge", [])
+    for site_id, groups in site_breakdowns.items():
+        for fam, rows, key, label in ((by_band, groups.get("band", []), "band", "band"),
+                                      (by_ssid, groups.get("ssid", []), "last_ssid", "ssid")):
+            for r in rows:
+                n = _num(r.get("count"))
+                if n is not None and r.get(key) not in (None, ""):
+                    fam.samples.append(({"site": _site(sites, site_id), label: str(r[key])}, n))
+    return [site_clients, ap_clients, by_band, by_ssid]
 
 
 def alarm_families(alarms, sites):

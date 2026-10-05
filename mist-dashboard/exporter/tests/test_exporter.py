@@ -70,21 +70,26 @@ class DeviceMetrics(unittest.TestCase):
 
 
 class WirelessMetrics(unittest.TestCase):
-    def test_site_ap_band_ssid(self):
+    def test_site_ap_and_breakdowns(self):
         fams = wireless_families(
             [AP, SWITCH], SITES,
             site_stats=[{"name": "Davis Library", "num_clients": 214}, {"num_clients": 5}],
             ap_counts=[{"last_ap": "5c5b35000001", "count": 14}, {"last_ap": "ffffffffffff", "count": 3}],
-            band_counts=[{"band": "5", "count": 900}, {"band": "24", "count": 300}],
-            ssid_counts=[{"last_ssid": "eduroam", "count": 1000}, {"last_ssid": "", "count": 2}])
+            site_breakdowns={"s1": {"band": [{"band": "5", "count": 900}, {"band": "24", "count": 300}],
+                                    "ssid": [{"last_ssid": "eduroam", "count": 1000},
+                                             {"last_ssid": "", "count": 2}]},
+                             "s2": {"band": [{"band": "5", "count": 7}], "ssid": []}})
         self.assertEqual(samples(fams, "mist_site_clients"), [({"site": "Davis Library"}, 214.0)])
         ap = samples(fams, "mist_ap_clients")                      # unknown AP and non-AP rows dropped
         self.assertEqual([(l["name"], v) for l, v in ap], [("ap-davis-1", 14.0)])
-        self.assertEqual({l["band"]: v for l, v in samples(fams, "mist_clients_by_band")}, {"5": 900.0, "24": 300.0})
-        self.assertEqual(samples(fams, "mist_clients_by_ssid"), [({"ssid": "eduroam"}, 1000.0)])
+        band = {(l["site"], l["band"]): v for l, v in samples(fams, "mist_site_clients_by_band")}
+        self.assertEqual(band, {("Davis Library", "5"): 900.0, ("Davis Library", "24"): 300.0,
+                                ('Atwater "Hall"', "5"): 7.0})
+        self.assertEqual(samples(fams, "mist_site_clients_by_ssid"),
+                         [({"site": "Davis Library", "ssid": "eduroam"}, 1000.0)])  # blank SSID dropped
 
     def test_empty_inputs(self):
-        fams = wireless_families([], {}, [], [], [], [])
+        fams = wireless_families([], {}, [], [], {})
         self.assertEqual([f.samples for f in fams], [[], [], [], []])
 
 
@@ -114,7 +119,7 @@ class Rendering(unittest.TestCase):
 class FakeClient:
     def __init__(self):
         self.fail = None
-        self.devices, self.alarms, self.calls = [AP], [], 0
+        self.devices, self.alarms, self.calls, self.client_calls = [AP], [], 0, []
 
     def list_sites(self):
         return SITES
@@ -126,9 +131,11 @@ class FakeClient:
         return list(self.devices)
 
     def list_site_stats(self):
-        return [{"name": "Davis Library", "num_clients": 214}]
+        return [{"id": "s1", "name": "Davis Library", "num_clients": 214},
+                {"id": "s2", "name": "Quiet Site", "num_clients": 0}]
 
-    def client_counts(self, distinct, duration):
+    def client_counts(self, distinct, duration, site_id=None):
+        self.client_calls.append((distinct, duration, site_id))
         return {"ap": [{"last_ap": "5c5b35000001", "count": 14}],
                 "band": [{"band": "5", "count": 9}],
                 "ssid": [{"last_ssid": "eduroam", "count": 9}]}[distinct]
@@ -157,6 +164,14 @@ class CollectorBehavior(unittest.TestCase):
         text = self.c.render()
         self.assertIn('mist_site_clients{site="Davis Library"} 214', text)
         self.assertIn('mist_ap_clients{', text)
+        self.assertIn('mist_site_clients_by_ssid{site="Davis Library",ssid="eduroam"} 9', text)
+
+    def test_breakdowns_only_query_sites_that_have_clients(self):
+        self.c.run_due()
+        per_site = [call for call in self.client.client_calls if call[2]]
+        self.assertEqual({call[2] for call in per_site}, {"s1"})        # s2 reports 0 clients: skipped
+        self.assertEqual(sorted(call[0] for call in per_site), ["band", "ssid"])
+        self.assertTrue(all(call[1] == "30m" for call in self.client.client_calls))
 
     def test_scrape_does_not_call_mist(self):
         self.c.run_due()
@@ -175,7 +190,7 @@ class CollectorBehavior(unittest.TestCase):
         self.assertIn('mist_exporter_errors_total{source="devices"} 1', text)
 
     def test_one_failing_source_does_not_block_the_others(self):
-        self.client.client_counts = lambda *a: (_ for _ in ()).throw(MistError("bad", status=400))
+        self.client.client_counts = lambda *a, **k: (_ for _ in ()).throw(MistError("bad", status=400))
         self.c.run_due()
         text = self.c.render()
         self.assertIn('mist_exporter_errors_total{source="clients"} 1', text)

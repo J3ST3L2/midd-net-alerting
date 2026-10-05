@@ -86,10 +86,12 @@ Grafana users, preferences and history live in Docker volumes (`grafana-data`,
 
 - **Open alarms** counts alarm records in the last 24 h whose `resolved_time`/`status` is unset.
   Mist does not close device down/up pairs, so use *Disconnected* for current device state.
-- **Wireless clients** are those Mist saw in the last 10 minutes (`CLIENT_WINDOW`). Per-site totals
-  are exact (org site stats). Per-AP counts come from Mist's clients/count endpoint, which caps its
-  list at 1000 entries, so the quietest APs can be missing. Missing means "not in the busiest ~1000",
-  not zero. Band and SSID counts are whole-org.
+- **Wireless clients:** the tiles use Mist's site stats (clients associated now). The SSID, band and
+  per-AP charts count clients seen in the last 30 minutes (`CLIENT_WINDOW`), the window that best matches
+  the site stats on this org, so they total roughly 10% higher. Per-AP counts come from Mist's
+  clients/count endpoint, which caps its list at 1000 entries, so the quietest APs can be missing
+  ("not in the busiest ~1000", not zero). SSID and band are queried per site, and only for sites that
+  currently have clients (about 9 calls a minute).
 - **CPU and memory** exist for switches (and gateways) only; Mist reports none for access points.
   PoE is switches only.
 - Device arrays in alarms are capped by Mist at 10, same as the poller notes.
