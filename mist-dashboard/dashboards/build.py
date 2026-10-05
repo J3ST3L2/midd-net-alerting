@@ -67,7 +67,8 @@ def stat(title, x, y, w, expr, desc="", unit="none", thresholds=None, color_mode
 
 def timeseries(title, x, y, w, h, targets, desc="", unit="none", stack=False, max_=None, min_=0):
     custom = {"lineWidth": 2, "fillOpacity": 18 if stack else 8, "showPoints": "never",
-              "stacking": {"mode": "normal" if stack else "none", "group": "A"}}
+              "stacking": {"mode": stack if isinstance(stack, str) else ("normal" if stack else "none"),
+                           "group": "A"}}
     return panel("timeseries", title, x, y, w, h, targets, desc, unit, steps((GREEN, None)),
                  custom=custom, min_=min_, max_=max_,
                  options={"legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
@@ -390,9 +391,92 @@ def device_view():
                      "One device: state, load, clients and history.")
 
 
+SLE_METRICS = (("coverage", "Coverage"), ("capacity", "Capacity"), ("time-to-connect", "Time to connect"),
+               ("roaming", "Roaming"), ("throughput", "Throughput"))
+SLE_NOTE = ("Share of clients Mist scored as degraded for this metric over the last 24 hours (Mist SLE). "
+            "Lower is better.")
+
+
+def _pct_affected(metric, by=None):
+    """Percent of clients affected: impacted / total, optionally grouped by a label."""
+    grp = "sum by (%s)" % by if by else "sum"
+    sel = 'mist_site_sle_users{metric="%s",site=~"$site",state="%%s"}' % metric
+    return "100 * %s(%s) / %s(%s)" % (grp, sel % "impacted", grp, sel % "total")
+
+
+def wifi_view():
+    cell = lambda col: {"matcher": {"id": "byName", "options": col}, "properties": [
+        {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 1},
+        {"id": "thresholds", "value": steps((GREEN, None), (AMBER, 5), (RED, 15))},
+        {"id": "custom.cellOptions", "value": {"type": "color-background"}}]}
+    widths = [5, 5, 5, 5, 4]
+    p = []
+    x = 0
+    for (metric, label), w in zip(SLE_METRICS, widths):
+        p.append(stat(label, x, 0, w, _pct_affected(metric), SLE_NOTE, unit="percent",
+                      thresholds=steps((GREEN, None), (AMBER, 5), (RED, 15)), color_mode="background"))
+        x += w
+    for pn in p:
+        pn["fieldConfig"]["defaults"]["decimals"] = 1
+    p += [
+        table("Clients affected by site (%)", 0, 4, 24, 8,
+              [target(_pct_affected(m, "site"), fmt="table", instant=True, ref=chr(65 + i))
+               for i, (m, _) in enumerate(SLE_METRICS)],
+              SLE_NOTE + " Click a site for its devices.", merge=True, sort="Coverage",
+              rename={"site": "Site", **{"Value #%s" % chr(65 + i): l for i, (_, l) in enumerate(SLE_METRICS)}},
+              order=["Site"] + [l for _, l in SLE_METRICS],
+              overrides=[cell(l) for _, l in SLE_METRICS]),
+        timeseries("Coverage: clients affected", 0, 12, 12, 8,
+                   [target(_pct_affected("coverage", "site"), "{{site}}")],
+                   "Weak signal and uplink/downlink asymmetry. " + SLE_NOTE, unit="percent"),
+        timeseries("Capacity: clients affected", 12, 12, 12, 8,
+                   [target(_pct_affected("capacity", "site"), "{{site}}")],
+                   "Too many clients or too little airtime. " + SLE_NOTE, unit="percent"),
+
+        table("APs behind coverage problems", 0, 20, 12, 10,
+              [target('topk(20, mist_ap_sle_degraded_ratio{metric="coverage",site=~"$site"})',
+                      fmt="table", instant=True)],
+              "Worst 25 APs per site by share of degraded coverage samples. Click an AP to open it.",
+              hide=("mac", "metric"), rename={"name": "AP", "site": "Site", "Value": "Degraded"},
+              order=["AP", "Site", "Degraded"], sort="Degraded",
+              overrides=[{"matcher": {"id": "byName", "options": "Degraded"},
+                          "properties": [{"id": "unit", "value": "percentunit"}, {"id": "decimals", "value": 0}]}]),
+        table("APs behind capacity problems", 12, 20, 12, 10,
+              [target('topk(20, mist_ap_sle_degraded_ratio{metric="capacity",site=~"$site"})',
+                      fmt="table", instant=True)],
+              "Worst 25 APs per site by share of degraded capacity samples. Click an AP to open it.",
+              hide=("mac", "metric"), rename={"name": "AP", "site": "Site", "Value": "Degraded"},
+              order=["AP", "Site", "Degraded"], sort="Degraded",
+              overrides=[{"matcher": {"id": "byName", "options": "Degraded"},
+                          "properties": [{"id": "unit", "value": "percentunit"}, {"id": "decimals", "value": 0}]}]),
+
+        table("APs that dropped offline (24 h)", 0, 30, 12, 9,
+              [target('sort_desc(changes(mist_device_up{type="ap",site=~"$site"}[24h]) > 0)',
+                      fmt="table", instant=True)],
+              "Times each AP's connection state changed in the last 24 hours. Repeated changes mean flapping.",
+              hide=("mac", "type", "model"), rename={"name": "AP", "site": "Site", "Value": "Changes"},
+              order=["AP", "Site", "Changes"], sort="Changes"),
+        bargauge("Recently restarted APs", 12, 30, 12, 9,
+                 'bottomk(10, mist_device_uptime_seconds{type="ap",site=~"$site"})', "{{name}} ({{site}})",
+                 "APs with the shortest uptime, i.e. the most recent reboots.", unit="s",
+                 thresholds=steps((AMBER, None), (GREEN, 3600))),
+
+        timeseries("Client share by band", 0, 39, 24, 8,
+                   [target('sum by (band) (mist_site_clients_by_band%s)' % SITE, "{{band}}")],
+                   "Each band's share of clients (stacked to 100%). A large 2.4 GHz share usually means "
+                   "clients are not reaching 5 GHz. " + BREAKDOWN_NOTE, stack="percent", max_=None),
+    ]
+    link_columns(p, "Clients affected by site (%)", {"Site": site_from_column("Site")})
+    for title in ("APs behind coverage problems", "APs behind capacity problems", "APs that dropped offline (24 h)"):
+        link_columns(p, title, {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
+    link_series(p, "Recently restarted APs", DEVICE_FROM_SERIES)
+    return dashboard("mist-wifi", "Mist Wifi Troubleshooting", p, [SITE_VAR],
+                     "Where wifi is degraded: client experience by site, the APs behind it, and AP stability.")
+
+
 def build():
     return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
-            "mist-site.json": site_view(), "mist-device.json": device_view()}
+            "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view()}
 
 
 def render(d):

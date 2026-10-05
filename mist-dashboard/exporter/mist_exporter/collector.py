@@ -8,12 +8,14 @@ import logging
 import threading
 import time
 
-from .metrics import Family, alarm_families, device_families, render, wireless_families
+from .metrics import Family, alarm_families, device_families, render, sle_families, wireless_families
 from .mist_api import MistError
 
 log = logging.getLogger("mist_exporter")
 
-SOURCES = ("sites", "devices", "site_stats", "clients", "alarms")
+SOURCES = ("sites", "devices", "site_stats", "clients", "sle", "alarms")
+SLE_METRICS = ("coverage", "capacity", "time-to-connect", "roaming", "throughput")
+SLE_AP_METRICS = ("coverage", "capacity")   # per-AP detail only where it points at a fix
 
 
 class Collector:
@@ -21,7 +23,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "sites": {}}}
+                      "clients": {"ap": [], "sites": {}}, "sle": {}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -30,6 +32,7 @@ class Collector:
     def _interval(self, source):
         return {"sites": self.cfg.sites_interval, "devices": self.cfg.devices_interval,
                 "site_stats": self.cfg.clients_interval, "clients": self.cfg.clients_interval,
+                "sle": self.cfg.sle_interval,
                 "alarms": self.cfg.alarms_interval}[source]
 
     def _fetch(self, source):
@@ -41,6 +44,8 @@ class Collector:
             return self.client.list_site_stats()
         if source == "clients":
             return self._fetch_clients()
+        if source == "sle":
+            return self._fetch_sle()
         now = int(self.clock())
         return self.client.search_alarms(now - self.cfg.alarm_window_hours * 3600, now)
 
@@ -52,6 +57,34 @@ class Collector:
         return {"ap": self.client.client_counts("ap", win),
                 "sites": {sid: {d: self.client.client_counts(d, win, site_id=sid) for d in ("band", "ssid")}
                           for sid in active}}
+
+    def _fetch_sle(self):
+        """SLE summaries (and per-AP detail for coverage/capacity) for each site that has clients.
+        One failing call (a metric a site does not support) is skipped, not fatal; the refresh only
+        fails if every call does."""
+        win = self.cfg.sle_window
+        with self._lock:
+            active = [s["id"] for s in self._data["site_stats"] if s.get("id") and s.get("num_clients")]
+        out, ok, failed = {}, 0, 0
+        for sid in active:
+            site = out.setdefault(sid, {"summary": {}, "aps": {}})
+            for metric in SLE_METRICS:
+                try:
+                    site["summary"][metric] = self.client.sle_summary(sid, metric, win)
+                    ok += 1
+                except MistError as e:
+                    failed += 1
+                    log.warning("SLE summary %s failed: %s", metric, e)
+            for metric in SLE_AP_METRICS:
+                try:
+                    site["aps"][metric] = self.client.sle_impacted_aps(sid, metric, win)
+                    ok += 1
+                except MistError as e:
+                    failed += 1
+                    log.warning("SLE impacted-aps %s failed: %s", metric, e)
+        if failed and not ok:
+            raise MistError("every SLE call failed")
+        return out
 
     def refresh(self, source):
         started = self.clock()
@@ -93,10 +126,11 @@ class Collector:
     def render(self):
         with self._lock:
             sites, devices, alarms = self._data["sites"], self._data["devices"], self._data["alarms"]
-            site_stats, clients = self._data["site_stats"], self._data["clients"]
+            site_stats, clients, sle = self._data["site_stats"], self._data["clients"], self._data["sle"]
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
-                    + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"]))
+                    + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
+                    + sle_families(sites, sle))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",
