@@ -32,8 +32,12 @@ keep/
   workflows/
   templates/
   tests/
+mist-poller/
+mist-dashboard/
 deploy/
 docs/
 ```
+
+The Mist telemetry dashboard (Grafana) is described in `deploy/mist-dashboard/README.md`.
 
 Production details are documented in `docs/librenms-keep-slack.md`.

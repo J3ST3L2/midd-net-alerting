@@ -15,3 +15,4 @@ mist-api-token
 __pycache__/
 *.pyc
 deploy/mist-poller/.env
+deploy/mist-dashboard/secrets/
