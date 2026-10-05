@@ -23,7 +23,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Wireless clients seen in the last 10 minutes.",
+      "description": "Wireless clients associated now, from Mist site stats.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -334,7 +334,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Whole org, not filtered by site.",
+      "description": "Clients seen in the last 30 minutes, so totals run a little above the Clients tile (which counts clients associated right now).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -387,7 +387,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_clients_by_band",
+          "expr": "sum by (band) (mist_site_clients_by_band{site=~\"$site\"})",
           "format": "time_series",
           "legendFormat": "{{band}}",
           "refId": "A"
@@ -543,7 +543,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Whole org, not filtered by site.",
+      "description": "Clients seen in the last 30 minutes, so totals run a little above the Clients tile (which counts clients associated right now).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -588,7 +588,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(mist_clients_by_ssid)",
+          "expr": "sort_desc(sum by (ssid) (mist_site_clients_by_ssid{site=~\"$site\"}))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "{{ssid}}",

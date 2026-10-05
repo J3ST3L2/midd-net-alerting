@@ -208,11 +208,15 @@ def overview():
                      "Fleet health and alarms across the Juniper Mist org.")
 
 
+BREAKDOWN_NOTE = ("Clients seen in the last 30 minutes, so totals run a little above the Clients tile "
+                  "(which counts clients associated right now).")
+
+
 def wireless():
     clients = 'mist_ap_clients%s' % SITE
     aps = 'mist_device_up{type="ap",site=~"$site"}'
     p = [
-        stat("Clients", 0, 0, 6, 'sum(mist_site_clients%s)' % SITE, "Wireless clients seen in the last 10 minutes."),
+        stat("Clients", 0, 0, 6, 'sum(mist_site_clients%s)' % SITE, "Wireless clients associated now, from Mist site stats."),
         stat("Access points", 6, 0, 6, 'count(%s)' % aps),
         stat("APs offline", 12, 0, 6, 'count(%s == 0) or vector(0)' % aps,
              thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
@@ -222,8 +226,8 @@ def wireless():
         timeseries("Clients over time", 0, 4, 16, 9,
                    [target('mist_site_clients%s' % SITE, "{{site}}")], "Wireless clients per site.", stack=True),
         timeseries("Clients by band", 16, 4, 8, 9,
-                   [target('mist_clients_by_band', "{{band}}")],
-                   "Whole org, not filtered by site.", stack=True),
+                   [target('sum by (band) (mist_site_clients_by_band%s)' % SITE, "{{band}}")],
+                   BREAKDOWN_NOTE, stack=True),
 
         bargauge("Busiest APs", 0, 13, 12, 10, 'topk(15, %s)' % clients, "{{name}} ({{site}})",
                  "The 15 APs with the most clients right now.",
@@ -231,8 +235,8 @@ def wireless():
         bargauge("Clients by site", 12, 13, 12, 10, 'sort_desc(mist_site_clients%s)' % SITE, "{{site}}",
                  "Current clients per site."),
 
-        bargauge("Clients by SSID", 0, 23, 12, 8, 'sort_desc(mist_clients_by_ssid)', "{{ssid}}",
-                 "Whole org, not filtered by site."),
+        bargauge("Clients by SSID", 0, 23, 12, 8,
+                 'sort_desc(sum by (ssid) (mist_site_clients_by_ssid%s))' % SITE, "{{ssid}}", BREAKDOWN_NOTE),
         table("Offline access points", 12, 23, 12, 8,
               [target('(time() - mist_device_last_seen_timestamp_seconds) and on(mac) (%s == 0)' % aps,
                       fmt="table", instant=True)],
@@ -325,7 +329,11 @@ def site_view():
                    stack=True),
         timeseries("CPU", 12, 16, 12, 8, [target('mist_device_cpu_percent%s' % s, "{{name}}")],
                    "CPU utilization of every device at this site.", unit="percent", max_=100),
-        table("Open alarms (24 h)", 0, 24, 24, 8,
+        bargauge("Clients by SSID", 0, 24, 12, 8,
+                 'sort_desc(mist_site_clients_by_ssid%s)' % s, "{{ssid}}", BREAKDOWN_NOTE),
+        timeseries("Clients by band", 12, 24, 12, 8,
+                   [target('mist_site_clients_by_band%s' % s, "{{band}}")], BREAKDOWN_NOTE, stack=True),
+        table("Open alarms (24 h)", 0, 32, 24, 8,
               [target('sort_desc(sum by (severity, type) (mist_alarms{site="$site",state="open"}))',
                       fmt="table", instant=True)],
               "Unresolved alarm records for this site in the last 24 hours.",

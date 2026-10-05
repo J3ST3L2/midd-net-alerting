@@ -29,7 +29,7 @@ def exported_metric_names():
     text = Collector(Config(), FakeClient()).render()
     from mist_exporter.metrics import alarm_families, device_families, wireless_families
     names = {f.name for f in device_families([], {}) + alarm_families([], {})
-             + wireless_families([], {}, [], [], [], [])}
+             + wireless_families([], {}, [], [], {})}
     return names | set(re.findall(r"^# TYPE (\S+)", text, re.M))
 
 

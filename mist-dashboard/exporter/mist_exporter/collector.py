@@ -21,7 +21,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "band": [], "ssid": []}}
+                      "clients": {"ap": [], "sites": {}}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -40,9 +40,18 @@ class Collector:
         if source == "site_stats":
             return self.client.list_site_stats()
         if source == "clients":
-            return {d: self.client.client_counts(d, self.cfg.client_window) for d in ("ap", "band", "ssid")}
+            return self._fetch_clients()
         now = int(self.clock())
         return self.client.search_alarms(now - self.cfg.alarm_window_hours * 3600, now)
+
+    def _fetch_clients(self):
+        """Per-AP counts (org-wide) plus band and SSID counts for each site that has clients."""
+        win = self.cfg.client_window
+        with self._lock:
+            active = [s["id"] for s in self._data["site_stats"] if s.get("id") and s.get("num_clients")]
+        return {"ap": self.client.client_counts("ap", win),
+                "sites": {sid: {d: self.client.client_counts(d, win, site_id=sid) for d in ("band", "ssid")}
+                          for sid in active}}
 
     def refresh(self, source):
         started = self.clock()
@@ -87,8 +96,7 @@ class Collector:
             site_stats, clients = self._data["site_stats"], self._data["clients"]
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
-                    + wireless_families(devices, sites, site_stats, clients["ap"], clients["band"],
-                                        clients["ssid"]))
+                    + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"]))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",
