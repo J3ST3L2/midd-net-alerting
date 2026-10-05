@@ -17,6 +17,10 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
   - *Mist Overview*: device counts, disconnected devices and for how long, alarms, firmware spread.
   - *Mist Wireless*: clients per site, band and AP; power-constrained APs.
   - *Mist Device Load*: CPU, memory, recent reboots, switch PoE load.
+  - *Mist Wifi Troubleshooting*: Mist SLE scores per site (coverage, capacity, time to connect, roaming,
+    throughput), the APs behind coverage and capacity problems, APs that dropped offline or rebooted,
+    and band share. Start here for a "wifi is bad in building X" complaint.
+  - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
 - Only Grafana publishes a port, and only on loopback. Exporter and Prometheus are on a private
   Docker network.
 
@@ -81,6 +85,15 @@ second layer.
 
 Grafana users, preferences and history live in Docker volumes (`grafana-data`,
 `prometheus-data`). Dashboards, datasource and config are all in Git.
+
+## Wifi SLE data
+
+Scores come from Mist's per-site SLE endpoints (`/sites/:id/sle/site/:id/metric/<metric>/summary` and
+`.../impacted-aps`), refreshed every 5 minutes (`SLE_INTERVAL_S`) over a 24 h window (`SLE_WINDOW`), for
+sites that currently have clients. A score here is the **share of clients affected**, so lower is better.
+Per-AP detail covers coverage and capacity only, and only the worst 25 APs per site and metric are
+exported, which keeps series counts bounded. A metric a site does not support is skipped with a warning
+in the exporter log.
 
 ## Known limits
 

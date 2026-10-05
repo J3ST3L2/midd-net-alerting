@@ -88,6 +88,22 @@ class MistClient:
             raise MistError("unexpected client count response shape")
         return [r for r in body["results"] if isinstance(r, dict)]
 
+    def sle_summary(self, site_id, metric, duration):
+        """Wifi SLE summary for one site and metric (coverage, capacity, ...): who was affected."""
+        body = self._get(self._url("/sites/%s/sle/site/%s/metric/%s/summary" % (site_id, site_id, metric),
+                                   {"duration": duration}))
+        if not isinstance(body, dict):
+            raise MistError("unexpected SLE summary response shape")
+        return body
+
+    def sle_impacted_aps(self, site_id, metric, duration):
+        """APs behind a degraded SLE metric: rows of {ap_mac, name, degraded, total, duration}."""
+        body = self._get(self._url("/sites/%s/sle/site/%s/metric/%s/impacted-aps" % (site_id, site_id, metric),
+                                   {"duration": duration, "limit": 1000}))
+        if not isinstance(body, dict) or not isinstance(body.get("aps"), list):
+            raise MistError("unexpected impacted-aps response shape")
+        return [a for a in body["aps"] if isinstance(a, dict)]
+
     def search_alarms(self, start, end):
         """All alarms in [start, end]. Raises if any page fails or pages are cut off."""
         url = self._url("/orgs/%s/alarms/search" % self.org_id,

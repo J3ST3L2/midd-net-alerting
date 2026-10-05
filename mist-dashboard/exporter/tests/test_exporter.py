@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
 from mist_exporter.main import make_handler  # noqa: E402
-from mist_exporter.metrics import alarm_families, device_families, render, wireless_families  # noqa: E402
+from mist_exporter.metrics import (TOP_APS, alarm_families, device_families, render,  # noqa: E402
+                                   sle_families, wireless_families)
 from mist_exporter.mist_api import MistError  # noqa: E402
 
 SITES = {"s1": "Davis Library", "s2": 'Atwater "Hall"'}
@@ -93,6 +94,35 @@ class WirelessMetrics(unittest.TestCase):
         self.assertEqual([f.samples for f in fams], [[], [], [], []])
 
 
+class SleMetrics(unittest.TestCase):
+    def body(self, num_users, total_users, num_aps=3, total_aps=40):
+        return {"impact": {"num_users": num_users, "total_users": total_users,
+                           "num_aps": num_aps, "total_aps": total_aps}}
+
+    def test_site_scores_and_worst_aps(self):
+        sle = {"s1": {"summary": {"coverage": self.body(120, 600), "roaming": {"impact": {}}},
+                      "aps": {"coverage": [{"ap_mac": "5C:5B:35:00:00:01", "name": "ap-a", "degraded": 94, "total": 165},
+                                           {"ap_mac": "5c5b35000002", "name": "ap-b", "degraded": 5, "total": 100},
+                                           {"ap_mac": "", "name": "no-mac", "degraded": 1, "total": 2},
+                                           {"ap_mac": "5c5b35000003", "name": "idle", "degraded": 0, "total": 0}]}}}
+        users, aps, worst = sle_families(SITES, sle)
+        got = {(l["metric"], l["state"]): v for l, v in users.samples}
+        self.assertEqual(got, {("coverage", "impacted"): 120.0, ("coverage", "total"): 600.0})
+        self.assertEqual(len(aps.samples), 2)                           # impacted + total APs
+        self.assertEqual([(l["name"], round(v, 3)) for l, v in worst.samples],
+                         [("ap-a", 0.57), ("ap-b", 0.05)])               # sorted worst-first, bad rows dropped
+        self.assertEqual(worst.samples[0][0]["mac"], "5c5b35000001")
+
+    def test_worst_aps_are_capped(self):
+        rows = [{"ap_mac": "%012x" % i, "name": "ap%d" % i, "degraded": i, "total": 1000} for i in range(100)]
+        _, _, worst = sle_families(SITES, {"s1": {"summary": {}, "aps": {"capacity": rows}}})
+        self.assertEqual(len(worst.samples), TOP_APS)
+        self.assertEqual(worst.samples[0][0]["name"], "ap99")
+
+    def test_empty(self):
+        self.assertEqual([f.samples for f in sle_families(SITES, {})], [[], [], []])
+
+
 class AlarmMetrics(unittest.TestCase):
     def test_counts_by_state(self):
         alarms = [{"site_id": "s1", "severity": "critical", "type": "device_down", "group": "infrastructure"},
@@ -120,6 +150,7 @@ class FakeClient:
     def __init__(self):
         self.fail = None
         self.devices, self.alarms, self.calls, self.client_calls = [AP], [], 0, []
+        self.sle_calls, self.sle_unsupported = [], set()
 
     def list_sites(self):
         return SITES
@@ -139,6 +170,16 @@ class FakeClient:
         return {"ap": [{"last_ap": "5c5b35000001", "count": 14}],
                 "band": [{"band": "5", "count": 9}],
                 "ssid": [{"last_ssid": "eduroam", "count": 9}]}[distinct]
+
+    def sle_summary(self, site_id, metric, duration):
+        self.sle_calls.append(("summary", site_id, metric, duration))
+        if metric in self.sle_unsupported:
+            raise MistError("Mist HTTP 404", status=404)
+        return {"impact": {"num_users": 10, "total_users": 100, "num_aps": 2, "total_aps": 20}}
+
+    def sle_impacted_aps(self, site_id, metric, duration):
+        self.sle_calls.append(("aps", site_id, metric, duration))
+        return [{"ap_mac": "5c5b35000001", "name": "ap-davis-1", "degraded": 50, "total": 100}]
 
     def search_alarms(self, start, end):
         return list(self.alarms)
@@ -188,6 +229,24 @@ class CollectorBehavior(unittest.TestCase):
         text = self.c.render()
         self.assertIn('mist_device_up{', text)                       # old data still served
         self.assertIn('mist_exporter_errors_total{source="devices"} 1', text)
+
+    def test_sle_only_for_active_sites_and_ap_detail_only_for_coverage_capacity(self):
+        self.c.run_due()
+        self.assertEqual({c[1] for c in self.client.sle_calls}, {"s1"})             # s2 has no clients
+        self.assertEqual(sorted(c[2] for c in self.client.sle_calls if c[0] == "aps"), ["capacity", "coverage"])
+        self.assertEqual(len([c for c in self.client.sle_calls if c[0] == "summary"]), 5)
+        self.assertTrue(all(c[3] == "1d" for c in self.client.sle_calls))
+        text = self.c.render()
+        self.assertIn('mist_site_sle_users{metric="coverage",site="Davis Library",state="impacted"} 10', text)
+        self.assertIn('mist_ap_sle_degraded_ratio{', text)
+
+    def test_unsupported_sle_metric_is_skipped_not_fatal(self):
+        self.client.sle_unsupported = {"roaming"}
+        self.c.run_due()
+        text = self.c.render()
+        self.assertIn('metric="coverage"', text)
+        self.assertNotIn('metric="roaming"', text)
+        self.assertIn('mist_exporter_errors_total{source="sle"} 0', text)
 
     def test_one_failing_source_does_not_block_the_others(self):
         self.client.client_counts = lambda *a, **k: (_ for _ in ()).throw(MistError("bad", status=400))

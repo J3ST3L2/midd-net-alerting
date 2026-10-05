@@ -128,6 +128,38 @@ def wireless_families(devices, sites, site_stats, ap_counts, site_breakdowns):
     return [site_clients, ap_clients, by_band, by_ssid]
 
 
+TOP_APS = 25   # per site and metric: keeps the series count bounded when hundreds of APs are impacted
+
+
+def sle_families(sites, sle):
+    """Wifi SLE: share of clients/APs affected per site and metric, plus the worst APs behind
+    coverage and capacity problems. sle: {site_id: {"summary": {metric: body}, "aps": {metric: rows}}}."""
+    users = Family("mist_site_sle_users", "Clients affected (impacted) and observed (total) per SLE metric.",
+                   "gauge", [])
+    aps = Family("mist_site_sle_aps", "APs affected (impacted) and observed (total) per SLE metric.", "gauge", [])
+    worst = Family("mist_ap_sle_degraded_ratio", "Share of an AP's samples that were degraded, worst APs only.",
+                   "gauge", [])
+    for site_id, data in sle.items():
+        site = _site(sites, site_id)
+        for metric, body in data.get("summary", {}).items():
+            impact = body.get("impact") if isinstance(body.get("impact"), dict) else {}
+            for fam, n_key, t_key in ((users, "num_users", "total_users"), (aps, "num_aps", "total_aps")):
+                for state, key in (("impacted", n_key), ("total", t_key)):
+                    v = _num(impact.get(key))
+                    if v is not None:
+                        fam.samples.append(({"site": site, "metric": metric, "state": state}, v))
+        for metric, rows in data.get("aps", {}).items():
+            ranked = []
+            for r in rows:
+                degraded, total = _num(r.get("degraded")), _num(r.get("total"))
+                if degraded is not None and total and _mac(r.get("ap_mac")):
+                    ranked.append((degraded / total, r))
+            for ratio, r in sorted(ranked, key=lambda x: -x[0])[:TOP_APS]:
+                worst.samples.append(({"site": site, "metric": metric, "mac": _mac(r["ap_mac"]),
+                                       "name": str(r.get("name") or _mac(r["ap_mac"]))}, ratio))
+    return [users, aps, worst]
+
+
 def alarm_families(alarms, sites):
     """Alarm records in the exporter's window, counted by site/severity/type/group/state."""
     counts = collections.Counter()

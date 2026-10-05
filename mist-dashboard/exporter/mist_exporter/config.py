@@ -28,6 +28,8 @@ class Config:
     alarms_interval: int = 120        # org alarms
     clients_interval: int = 60        # wireless client counts (site stats + clients/count)
     client_window: str = "30m"        # clients counted = seen in this window (closest to Mist site stats)
+    sle_interval: int = 300           # wifi SLE scores (coverage, capacity, ...)
+    sle_window: str = "1d"            # SLE look-back, Mist's own default
     sites_interval: int = 900         # site id -> name map
     alarm_window_hours: int = 24
     page_limit: int = 100
@@ -47,6 +49,8 @@ def load():
         alarms_interval=int(env("ALARMS_INTERVAL_S", "120")),
         clients_interval=int(env("CLIENTS_INTERVAL_S", "60")),
         client_window=env("CLIENT_WINDOW", "30m").strip(),
+        sle_interval=int(env("SLE_INTERVAL_S", "300")),
+        sle_window=env("SLE_WINDOW", "1d").strip(),
         sites_interval=int(env("SITES_INTERVAL_S", "900")),
         alarm_window_hours=int(env("ALARM_WINDOW_HOURS", "24")),
         page_limit=int(env("PAGE_LIMIT", "100")),
