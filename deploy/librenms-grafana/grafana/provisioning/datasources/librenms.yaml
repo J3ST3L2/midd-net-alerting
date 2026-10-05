@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: LibreNMS DB
+    uid: librenms-db
+    type: mysql
+    access: proxy
+    url: $LIBRENMS_DB_HOST
+    user: $LIBRENMS_DB_USER
+    isDefault: true
+    editable: false
+    jsonData:
+      database: $LIBRENMS_DB_NAME
+      maxOpenConns: 5
+      maxIdleConns: 2
+    secureJsonData:
+      password: $__file{/run/secrets/librenms_db_password}

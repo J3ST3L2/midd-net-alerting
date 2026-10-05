@@ -16,3 +16,4 @@ __pycache__/
 *.pyc
 deploy/mist-poller/.env
 deploy/mist-dashboard/secrets/
+deploy/librenms-grafana/secrets/

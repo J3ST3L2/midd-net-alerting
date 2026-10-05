@@ -1,0 +1,54 @@
+# LibreNMS campus map in Grafana: Grafana -> LibreNMS MariaDB (read-only user).
+#
+# Separate from deploy/mist-dashboard so each stack can move or fail independently.
+# Only Grafana is reachable from the host, on loopback; put a reverse proxy in front of it.
+
+name: librenms-grafana
+
+services:
+  grafana:
+    image: grafana/grafana-oss:12.4.3
+    container_name: librenms-grafana
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001/}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-true}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/campus-netmap.json
+      LIBRENMS_DB_HOST: ${LIBRENMS_DB_HOST:?set LIBRENMS_DB_HOST in .env}
+      LIBRENMS_DB_NAME: ${LIBRENMS_DB_NAME:-librenms}
+      LIBRENMS_DB_USER: ${LIBRENMS_DB_USER:-grafana_ro}
+    secrets:
+      - grafana_admin_password
+      - librenms_db_password
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  grafana-data:
+
+secrets:
+  grafana_admin_password:
+    file: ./secrets/grafana-admin-password
+  librenms_db_password:
+    file: ./secrets/librenms-db-password
