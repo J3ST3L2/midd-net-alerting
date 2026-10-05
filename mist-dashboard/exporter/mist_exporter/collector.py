@@ -8,7 +8,7 @@ import logging
 import threading
 import time
 
-from .metrics import Family, alarm_families, device_families, render, sle_families, wireless_families
+from .metrics import Family, alarm_families, device_families, render, site_ap_families, sle_families, wireless_families
 from .mist_api import MistError
 
 log = logging.getLogger("mist_exporter")
@@ -130,7 +130,7 @@ class Collector:
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
-                    + sle_families(sites, sle))
+                    + site_ap_families(site_stats) + sle_families(sites, sle))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",
