@@ -33,6 +33,9 @@ services:
     secrets:
       - grafana_admin_password
       - librenms_db_password
+    networks:
+      - default
+      - mist-metrics
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -43,6 +46,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+networks:
+  # Created by deploy/mist-dashboard; lets this Grafana query Mist's Prometheus (not published on the host).
+  mist-metrics:
+    external: true
+    name: mist-dashboard-metrics
 
 volumes:
   grafana-data:

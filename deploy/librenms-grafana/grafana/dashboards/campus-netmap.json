@@ -1,30 +1,63 @@
 {
   "title": "Campus Network Map",
   "uid": "midd-campus-netmap",
-  "tags": ["librenms", "network"],
+  "tags": [
+    "librenms",
+    "network"
+  ],
   "timezone": "browser",
   "refresh": "1m",
-  "time": {"from": "now-1h", "to": "now"},
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "schemaVersion": 39,
   "editable": true,
   "templating": {
     "list": [
-      {"name": "ds", "label": "LibreNMS DB", "type": "datasource", "query": "mysql", "hide": 0, "current": {}},
-      {"name": "librenms_url", "label": "LibreNMS URL", "type": "textbox", "query": "https://raccoon.middlebury.edu", "hide": 2,
-       "current": {"text": "https://raccoon.middlebury.edu", "value": "https://raccoon.middlebury.edu"}}
+      {
+        "name": "ds",
+        "label": "LibreNMS DB",
+        "type": "datasource",
+        "query": "mysql",
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "librenms_url",
+        "label": "LibreNMS URL",
+        "type": "textbox",
+        "query": "https://raccoon.middlebury.edu",
+        "hide": 2,
+        "current": {
+          "text": "https://raccoon.middlebury.edu",
+          "value": "https://raccoon.middlebury.edu"
+        }
+      }
     ]
   },
   "panels": [
     {
       "id": 1,
       "type": "geomap",
-      "title": "Campus network",
-      "datasource": {"type": "mysql", "uid": "${ds}"},
-      "gridPos": {"h": 22, "w": 24, "x": 0, "y": 0},
+      "title": "Campus network and Mist APs",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "gridPos": {
+        "h": 22,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
           "refId": "nodes",
-          "datasource": {"type": "mysql", "uid": "${ds}"},
+          "datasource": {
+            "type": "mysql",
+            "uid": "${ds}"
+          },
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
@@ -32,75 +65,362 @@
         },
         {
           "refId": "edges",
-          "datasource": {"type": "mysql", "uid": "${ds}"},
+          "datasource": {
+            "type": "mysql",
+            "uid": "${ds}"
+          },
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
           "rawSql": "-- One edge per building pair, built from LLDP/CDP neighbours in the links table.\n-- Each physical link is seen from both ends, so collapse those first, then\n-- roll physical links (incl. LAG members) up to building-to-building edges.\nWITH seen AS (\n  SELECT\n    LEAST(dl.location_id, dr.location_id)    AS a,\n    GREATEST(dl.location_id, dr.location_id) AS b,\n    CASE WHEN k.remote_port_id IS NULL\n         THEN CONCAT('L', k.local_port_id)\n         ELSE CONCAT(LEAST(k.local_port_id, k.remote_port_id), '-',\n                     GREATEST(k.local_port_id, k.remote_port_id)) END AS phys,\n    (pl.ifOperStatus <> 'up')                AS is_down,\n    pl.ifHighSpeed                           AS mbps\n  FROM links k\n  JOIN devices dl ON dl.device_id = k.local_device_id\n  JOIN devices dr ON dr.device_id = k.remote_device_id\n  JOIN ports   pl ON pl.port_id   = k.local_port_id\n  JOIN locations la ON la.id = dl.location_id\n  JOIN locations lb ON lb.id = dr.location_id\n  WHERE k.active = 1\n    AND pl.deleted = 0\n    AND dl.disabled = 0 AND dl.`ignore` = 0 AND dl.type = 'network'\n    AND dr.disabled = 0 AND dr.`ignore` = 0 AND dr.type = 'network'\n    AND dl.location_id <> dr.location_id\n    AND la.lat IS NOT NULL AND lb.lat IS NOT NULL\n    -- AND pl.ifTrunk IS NOT NULL   -- uncomment to keep only 802.1Q trunk ports\n),\nphys AS (\n  SELECT a, b, phys, MAX(is_down) AS is_down, MAX(mbps) AS mbps\n  FROM seen\n  GROUP BY a, b, phys\n)\nSELECT\n  CONCAT(a, '-', b)          AS id,\n  CAST(a AS CHAR)            AS source,\n  CAST(b AS CHAR)            AS target,\n  COUNT(*)                   AS links,\n  SUM(is_down)               AS down_links,\n  ROUND(SUM(mbps) / 1000, 1) AS gbps\nFROM phys\nGROUP BY a, b"
+        },
+        {
+          "refId": "aps",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mist-prometheus"
+          },
+          "expr": "mist_site_aps",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "aps_down",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mist-prometheus"
+          },
+          "expr": "(mist_site_aps - mist_site_aps_connected) > 0",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": [
-          {"matcher": {"id": "byName", "options": "down"},
-           "properties": [
-             {"id": "color", "value": {"mode": "thresholds"}},
-             {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}
-           ]},
-          {"matcher": {"id": "byName", "options": "down_links"},
-           "properties": [
-             {"id": "color", "value": {"mode": "thresholds"}},
-             {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}
-           ]},
-          {"matcher": {"id": "byName", "options": "gbps"},
-           "properties": [{"id": "unit", "value": "Gbits"}]},
-          {"matcher": {"id": "byName", "options": "title"},
-           "properties": [
-             {"id": "links", "value": [
-               {"title": "Open ${__data.fields.title} in LibreNMS",
-                "url": "${librenms_url}/devices/location=${__data.fields.id}",
-                "targetBlank": true}
-             ]}
-           ]}
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "down"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "down_links"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gbps"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Gbits"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open ${__data.fields.title} in LibreNMS",
+                    "url": "${librenms_url}/devices/location=${__data.fields.id}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
         ]
       },
       "options": {
-        "view": {"id": "fit", "allLayers": true, "padding": 8, "maxZoom": 18, "lat": 0, "lon": 0, "zoom": 15},
-        "controls": {"showZoom": true, "mouseWheelZoom": true, "showAttribution": true, "showScale": false, "showMeasure": false, "showDebug": false},
-        "basemap": {"type": "esri-xyz", "name": "Satellite", "config": {"server": "world-imagery"}},
+        "view": {
+          "id": "fit",
+          "allLayers": true,
+          "padding": 8,
+          "maxZoom": 18,
+          "lat": 0,
+          "lon": 0,
+          "zoom": 15
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": false,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "esri-xyz",
+          "name": "Satellite",
+          "config": {
+            "server": "world-imagery"
+          }
+        },
         "layers": [
+          {
+            "type": "markers",
+            "name": "Mist APs (size = AP count)",
+            "filterData": {
+              "id": "byRefId",
+              "options": "aps"
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "tooltip": true,
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "blue"
+                },
+                "size": {
+                  "field": "Value",
+                  "fixed": 8,
+                  "min": 10,
+                  "max": 30
+                },
+                "opacity": 0.5,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "text": {
+                  "mode": "field",
+                  "field": "Value",
+                  "fixed": ""
+                },
+                "textConfig": {
+                  "fontSize": 10,
+                  "textAlign": "center",
+                  "textBaseline": "middle",
+                  "offsetX": 0,
+                  "offsetY": 0
+                }
+              }
+            }
+          },
           {
             "type": "network",
             "name": "Switches & uplinks",
-            "location": {"mode": "auto"},
+            "location": {
+              "mode": "auto"
+            },
             "tooltip": true,
             "config": {
               "showLegend": false,
               "arrow": 0,
               "style": {
-                "color": {"field": "down", "fixed": "green"},
-                "size": {"field": "switches", "fixed": 8, "min": 7, "max": 18},
+                "color": {
+                  "field": "down",
+                  "fixed": "green"
+                },
+                "size": {
+                  "field": "switches",
+                  "fixed": 8,
+                  "min": 7,
+                  "max": 18
+                },
                 "opacity": 0.9,
-                "symbol": {"mode": "fixed", "fixed": "img/icons/marker/circle.svg"},
-                "symbolAlign": {"horizontal": "center", "vertical": "center"},
-                "text": {"mode": "field", "field": "title", "fixed": ""},
-                "textConfig": {"fontSize": 11, "textAlign": "center", "textBaseline": "top", "offsetX": 0, "offsetY": 14}
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "text": {
+                  "mode": "field",
+                  "field": "title",
+                  "fixed": ""
+                },
+                "textConfig": {
+                  "fontSize": 11,
+                  "textAlign": "center",
+                  "textBaseline": "top",
+                  "offsetX": 0,
+                  "offsetY": 14
+                }
               },
               "edgeStyle": {
-                "color": {"field": "down_links", "fixed": "green"},
-                "size": {"field": "gbps", "fixed": 3, "min": 2, "max": 8},
+                "color": {
+                  "field": "down_links",
+                  "fixed": "green"
+                },
+                "size": {
+                  "field": "gbps",
+                  "fixed": 3,
+                  "min": 2,
+                  "max": 8
+                },
                 "opacity": 0.85,
-                "symbol": {"mode": "fixed", "fixed": "img/icons/marker/circle.svg"},
-                "textConfig": {"fontSize": 10, "textAlign": "center", "textBaseline": "middle", "offsetX": 0, "offsetY": 0}
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "textConfig": {
+                  "fontSize": 10,
+                  "textAlign": "center",
+                  "textBaseline": "middle",
+                  "offsetX": 0,
+                  "offsetY": 0
+                }
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "nodes|edges"
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Mist sites with APs offline",
+            "filterData": {
+              "id": "byRefId",
+              "options": "aps_down"
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "tooltip": true,
+            "config": {
+              "showLegend": false,
+              "style": {
+                "color": {
+                  "fixed": "red"
+                },
+                "size": {
+                  "fixed": 12
+                },
+                "opacity": 0.9,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "text": {
+                  "mode": "field",
+                  "field": "Value",
+                  "fixed": ""
+                },
+                "textConfig": {
+                  "fontSize": 10,
+                  "textAlign": "center",
+                  "textBaseline": "middle",
+                  "offsetX": 0,
+                  "offsetY": 0
+                }
               }
             }
           }
         ],
-        "tooltip": {"mode": "details"}
-      }
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "transformations": [
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "targetField": "latitude",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "longitude",
+                "destinationType": "number"
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }

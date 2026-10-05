@@ -58,6 +58,7 @@ services:
       - exporter
     networks:
       - backend
+      - metrics
 
   grafana:
     image: grafana/grafana-oss:12.4.3
@@ -99,6 +100,9 @@ services:
 
 networks:
   backend:
+  # Shared with deploy/librenms-grafana so its Grafana can query Prometheus; nothing else joins it.
+  metrics:
+    name: mist-dashboard-metrics
 
 volumes:
   prometheus-data:

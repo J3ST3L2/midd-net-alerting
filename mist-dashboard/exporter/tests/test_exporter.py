@@ -12,7 +12,7 @@ from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
 from mist_exporter.main import make_handler  # noqa: E402
 from mist_exporter.metrics import (TOP_APS, alarm_families, device_families, render,  # noqa: E402
-                                   sle_families, wireless_families)
+                                   site_ap_families, sle_families, wireless_families)
 from mist_exporter.mist_api import MistError  # noqa: E402
 
 SITES = {"s1": "Davis Library", "s2": 'Atwater "Hall"'}
@@ -94,6 +94,21 @@ class WirelessMetrics(unittest.TestCase):
         self.assertEqual([f.samples for f in fams], [[], [], [], []])
 
 
+class SiteApMetrics(unittest.TestCase):
+    def test_positions_become_labels_and_bad_ones_are_skipped(self):
+        fams = site_ap_families([
+            {"name": "Davis Library", "num_ap": 40, "num_ap_connected": 38, "latlng": {"lat": 44.0087, "lng": -73.1768}},
+            {"name": "No GPS", "num_ap": 3},
+            {"name": "Null Island", "num_ap": 2, "latlng": {"lat": 0, "lng": 0}},
+            {"num_ap": 1, "latlng": {"lat": 1, "lng": 1}}])
+        pos = {"site": "Davis Library", "latitude": "44.0087", "longitude": "-73.1768"}
+        self.assertEqual(samples(fams, "mist_site_aps"), [(pos, 40.0)])
+        self.assertEqual(samples(fams, "mist_site_aps_connected"), [(pos, 38.0)])
+
+    def test_empty_inputs(self):
+        self.assertEqual([f.samples for f in site_ap_families([])], [[], []])
+
+
 class SleMetrics(unittest.TestCase):
     def body(self, num_users, total_users, num_aps=3, total_aps=40):
         return {"impact": {"num_users": num_users, "total_users": total_users,
@@ -162,7 +177,8 @@ class FakeClient:
         return list(self.devices)
 
     def list_site_stats(self):
-        return [{"id": "s1", "name": "Davis Library", "num_clients": 214},
+        return [{"id": "s1", "name": "Davis Library", "num_clients": 214,
+                 "num_ap": 40, "num_ap_connected": 38, "latlng": {"lat": 44.0087, "lng": -73.1768}},
                 {"id": "s2", "name": "Quiet Site", "num_clients": 0}]
 
     def client_counts(self, distinct, duration, site_id=None):

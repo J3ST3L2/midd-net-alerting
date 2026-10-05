@@ -128,6 +128,25 @@ def wireless_families(devices, sites, site_stats, ap_counts, site_breakdowns):
     return [site_clients, ap_clients, by_band, by_ssid]
 
 
+def site_ap_families(site_stats):
+    """AP counts per site with the site's GPS position as labels, for map panels. Sites without
+    coordinates (or with 0/0 placeholders) are skipped: a wrong pin is worse than a missing one."""
+    total = Family("mist_site_aps", "APs assigned to the site, labelled with its GPS position.", "gauge", [])
+    up = Family("mist_site_aps_connected", "APs connected now, labelled with the site's GPS position.",
+                "gauge", [])
+    for s in site_stats:
+        ll = s.get("latlng") if isinstance(s.get("latlng"), dict) else {}
+        lat, lng = _num(ll.get("lat")), _num(ll.get("lng"))
+        if not s.get("name") or lat is None or lng is None or (lat == 0 and lng == 0):
+            continue
+        labels = {"site": str(s["name"]), "latitude": repr(lat), "longitude": repr(lng)}
+        for fam, key in ((total, "num_ap"), (up, "num_ap_connected")):
+            n = _num(s.get(key))
+            if n is not None:
+                fam.samples.append((labels, n))
+    return [total, up]
+
+
 TOP_APS = 25   # per site and metric: keeps the series count bounded when hundreds of APs are impacted
 
 
