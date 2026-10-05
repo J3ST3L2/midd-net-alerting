@@ -60,6 +60,27 @@ class Dashboards(unittest.TestCase):
                 self.assertLessEqual(g["x"] + g["w"], 24, "%s/%s overflows the grid" % (name, p["title"]))
             json.dumps(d)
 
+    def test_drilldown_links_point_at_real_dashboards(self):
+        dashboards = build.build()
+        uids = {d["uid"] for d in dashboards.values()}
+        found = 0
+        for name, d in dashboards.items():
+            for p in d["panels"]:
+                fc = p["fieldConfig"]
+                links = list(fc["defaults"].get("links", []))
+                for o in fc["overrides"]:
+                    for prop in o["properties"]:
+                        if prop["id"] == "links":
+                            links += prop["value"]
+                for link in links:
+                    m = re.match(r"/d/([a-z-]+)\?var-(\w+)=", link["url"])
+                    self.assertTrue(m, "%s/%s: unexpected link %s" % (name, p["title"], link["url"]))
+                    self.assertIn(m.group(1), uids)
+                    target_vars = {v["name"] for v in dashboards[m.group(1) + ".json"]["templating"]["list"]}
+                    self.assertIn(m.group(2), target_vars)
+                    found += 1
+        self.assertGreater(found, 5)
+
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
             boxes = [(p["gridPos"], p["title"]) for p in d["panels"]]

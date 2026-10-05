@@ -31,7 +31,7 @@ def steps(*pairs):
 
 
 def panel(kind, title, x, y, w, h, targets, desc="", unit=None, thresholds=None, options=None,
-          overrides=None, custom=None, transformations=None, decimals=None, mappings=None, min_=None, max_=None):
+          overrides=None, custom=None, transformations=None, decimals=None, mappings=None, min_=None, max_=None, links=None):
     defaults = {"color": {"mode": "palette-classic"} if kind == "timeseries" else {"mode": "thresholds"}}
     if unit:
         defaults["unit"] = unit
@@ -47,6 +47,8 @@ def panel(kind, title, x, y, w, h, targets, desc="", unit=None, thresholds=None,
         defaults["min"] = min_
     if max_ is not None:
         defaults["max"] = max_
+    if links:
+        defaults["links"] = links
     p = {"type": kind, "title": title, "description": desc, "datasource": DS,
          "gridPos": {"x": x, "y": y, "w": w, "h": h}, "targets": targets,
          "fieldConfig": {"defaults": defaults, "overrides": overrides or []},
@@ -72,16 +74,17 @@ def timeseries(title, x, y, w, h, targets, desc="", unit="none", stack=False, ma
                           "tooltip": {"mode": "multi", "sort": "desc"}})
 
 
-def bargauge(title, x, y, w, h, expr, legend, desc="", unit="none", thresholds=None, max_=None):
+def bargauge(title, x, y, w, h, expr, legend, desc="", unit="none", thresholds=None, max_=None, links=None):
     return panel("bargauge", title, x, y, w, h, [target(expr, legend, instant=True)], desc, unit,
-                 thresholds or steps((BLUE, None)), min_=0, max_=max_,
+                 thresholds or steps((BLUE, None)), min_=0, max_=max_, links=links,
                  options={"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": True,
                           "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}})
 
 
-def table(title, x, y, w, h, targets, desc="", hide=(), rename=None, order=None, overrides=None, sort=None):
+def table(title, x, y, w, h, targets, desc="", hide=(), rename=None, order=None, overrides=None, sort=None,
+          merge=False):
     excl = {k: True for k in ("Time", "__name__", "job", "instance") + tuple(hide)}
-    transform = [{"id": "organize", "options": {"excludeByName": excl, "renameByName": rename or {},
+    transform = ([{"id": "merge", "options": {}}] if merge else []) + [{"id": "organize", "options": {"excludeByName": excl, "renameByName": rename or {},
                                                 "indexByName": {n: i for i, n in enumerate(order or [])}}}]
     return panel("table", title, x, y, w, h, targets, desc, thresholds=steps((GREEN, None)),
                  transformations=transform, overrides=overrides or [],
@@ -89,11 +92,42 @@ def table(title, x, y, w, h, targets, desc="", hide=(), rename=None, order=None,
                           "sortBy": [{"displayName": sort, "desc": True}] if sort else []})
 
 
-def variable(name, label, query, multi=True):
+def _link(title, url):
+    return {"title": title, "url": url, "targetBlank": False}
+
+
+# Grafana prefixes these with the configured sub-path, so they work behind /mist-dashboard/.
+SITE_FROM_SERIES = _link("Open site", "/d/mist-site?var-site=${__field.labels.site:percentencode}")
+DEVICE_FROM_SERIES = _link("Open device", "/d/mist-device?var-device=${__field.labels.name:percentencode}")
+
+
+def site_from_column(col):
+    return _link("Open site", '/d/mist-site?var-site=${__data.fields["%s"]:percentencode}' % col)
+
+
+def device_from_column(col):
+    return _link("Open device", '/d/mist-device?var-device=${__data.fields["%s"]:percentencode}' % col)
+
+
+def link_series(panels, title, link):
+    """Click a bar or series in the named panel to open another dashboard."""
+    next(p for p in panels if p["title"] == title)["fieldConfig"]["defaults"]["links"] = [link]
+
+
+def link_columns(panels, title, links):
+    """Click a cell in the named table to open another dashboard. links: {column: link}."""
+    p = next(p for p in panels if p["title"] == title)
+    p["fieldConfig"]["overrides"] += [
+        {"matcher": {"id": "byName", "options": col}, "properties": [{"id": "links", "value": [lk]}]}
+        for col, lk in links.items()]
+
+
+def variable(name, label, query, multi=True, include_all=True):
     return {"name": name, "label": label, "type": "query", "datasource": DS, "refresh": 2,
-            "query": {"query": query, "refId": "v"}, "includeAll": True, "multi": multi,
-            "allValue": ".*", "current": {"selected": True, "text": "All", "value": "$__all"},
-            "sort": 5}
+            "query": {"query": query, "refId": "v"}, "includeAll": include_all,
+            "multi": multi and include_all, "sort": 5,
+            **({"allValue": ".*", "current": {"selected": True, "text": "All", "value": "$__all"}}
+               if include_all else {})}
 
 
 def dashboard(uid, title, panels, variables, desc):
@@ -166,6 +200,10 @@ def overview():
                    [target('sum by (severity) (mist_alarms{site=~"$site"})', "{{severity}}")],
                    "Alarm records in the trailing 24 hour window, open and resolved.", stack=True),
     ]
+    link_series(p, "Devices by site", SITE_FROM_SERIES)
+    link_series(p, "Disconnected by site", SITE_FROM_SERIES)
+    link_columns(p, "Disconnected now", {"Device": device_from_column("Device"), "Site": site_from_column("Site")})
+    link_columns(p, "Open alarms (24 h)", {"Site": site_from_column("Site")})
     return dashboard("mist-overview", "Mist Overview", p, [SITE_VAR],
                      "Fleet health and alarms across the Juniper Mist org.")
 
@@ -197,6 +235,9 @@ def wireless():
               hide=("mac", "Value"), rename={"name": "AP", "site": "Site", "model": "Model", "type": "Type"},
               order=["AP", "Site", "Model"]),
     ]
+    link_series(p, "Busiest APs", DEVICE_FROM_SERIES)
+    link_series(p, "Clients by site", SITE_FROM_SERIES)
+    link_columns(p, "Power-constrained APs", {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
     return dashboard("mist-wireless", "Mist Wireless", p, [SITE_VAR], "Wireless client load across the Mist org.")
 
 
@@ -225,12 +266,119 @@ def load():
                  "PoE power drawn as a share of the switch budget. Only switches that report PoE appear.",
                  unit="percent", max_=100, thresholds=steps((GREEN, None), (AMBER, 75), (RED, 90))),
     ]
+    for title in ("Highest CPU", "Highest memory", "Recently restarted", "PoE load"):
+        link_series(p, title, DEVICE_FROM_SERIES)
     return dashboard("mist-load", "Mist Device Load", p, [SITE_VAR, TYPE_VAR],
                      "CPU, memory, uptime and PoE load of Mist-managed devices.")
 
 
+UP_MAP = [{"type": "value", "options": {"1": {"text": "Up", "color": GREEN},
+                                          "0": {"text": "Down", "color": RED}}}]
+
+
+def site_view():
+    s = '{site="$site"}'
+    by = "name, type, model, mac"
+    # One instant query per column; `merge` joins them into one row per device.
+    cols = [("A", 'max by (%s) (mist_device_up%s)' % (by, s)),
+            ("B", 'max by (%s) (mist_device_uptime_seconds%s)' % (by, s)),
+            ("C", 'max by (%s) (mist_ap_clients%s)' % (by, s)),
+            ("D", 'max by (%s) (mist_device_cpu_percent%s)' % (by, s)),
+            ("E", 'max by (%s) (mist_device_memory_percent%s)' % (by, s)),
+            ("F", 'max by (%s, version) (mist_device_info%s)' % (by, s))]
+    pct = [{"id": "unit", "value": "percent"}, {"id": "decimals", "value": 0}]
+    devices = table(
+        "Devices", 0, 4, 24, 12,
+        [target(e, fmt="table", instant=True, ref=r) for r, e in cols],
+        "Every device at this site. Click a name to open it.", merge=True, sort="Status",
+        hide=("mac",),
+        rename={"name": "Device", "type": "Type", "model": "Model", "version": "Firmware",
+                "Value #A": "Status", "Value #B": "Uptime", "Value #C": "Clients",
+                "Value #D": "CPU", "Value #E": "Memory"},
+        order=["Device", "Type", "Model", "Status", "Clients", "CPU", "Memory", "Uptime", "Firmware"],
+        overrides=[
+            {"matcher": {"id": "byName", "options": "Status"},
+             "properties": [{"id": "mappings", "value": UP_MAP},
+                            {"id": "custom.cellOptions", "value": {"type": "color-background"}}]},
+            {"matcher": {"id": "byName", "options": "Uptime"}, "properties": [{"id": "unit", "value": "s"}]},
+            {"matcher": {"id": "byName", "options": "CPU"}, "properties": pct},
+            {"matcher": {"id": "byName", "options": "Memory"}, "properties": pct}])
+    p = [
+        stat("Devices", 0, 0, 5, 'count(mist_device_up%s)' % s),
+        stat("Disconnected", 5, 0, 5, 'count(mist_device_up%s == 0) or vector(0)' % s,
+             thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
+        stat("Wireless clients", 10, 0, 5, 'sum(mist_ap_clients%s)' % s),
+        stat("Critical alarms (24 h)", 15, 0, 5,
+             'sum(mist_alarms{site="$site",state="open",severity="critical"}) or vector(0)',
+             thresholds=steps((GREEN, None), (RED, 1))),
+        stat("Power-constrained APs", 20, 0, 4, 'sum(mist_ap_power_constrained%s) or vector(0)' % s,
+             thresholds=steps((GREEN, None), (AMBER, 1)), color_mode="background"),
+        devices,
+        timeseries("Clients per AP", 0, 16, 12, 8,
+                   [target('mist_ap_clients%s' % s, "{{name}}")], "Wireless clients on each AP at this site.",
+                   stack=True),
+        timeseries("CPU", 12, 16, 12, 8, [target('mist_device_cpu_percent%s' % s, "{{name}}")],
+                   "CPU utilization of every device at this site.", unit="percent", max_=100),
+        table("Open alarms (24 h)", 0, 24, 24, 8,
+              [target('sort_desc(sum by (severity, type) (mist_alarms{site="$site",state="open"}))',
+                      fmt="table", instant=True)],
+              "Unresolved alarm records for this site in the last 24 hours.",
+              rename={"severity": "Severity", "type": "Type", "Value": "Alarms"},
+              hide=("site", "group", "state"), order=["Severity", "Type", "Alarms"], sort="Alarms"),
+    ]
+    link_columns(p, "Devices", {"Device": device_from_column("Device")})
+    return dashboard("mist-site", "Mist Site", p,
+                     [variable("site", "Site", "label_values(mist_device_up, site)", include_all=False)],
+                     "One site: its devices, clients, load and alarms.")
+
+
+def device_view():
+    d = '{name="$device"}'
+    p = [
+        stat("Status", 0, 0, 4, 'max(mist_device_up%s)' % d, mappings=UP_MAP, color_mode="background",
+             thresholds=steps((RED, None), (GREEN, 1))),
+        stat("Uptime", 4, 0, 4, 'max(mist_device_uptime_seconds%s)' % d, unit="s"),
+        stat("Clients", 8, 0, 4, 'sum(mist_ap_clients%s)' % d, "Access points only."),
+        stat("CPU", 12, 0, 4, 'max(mist_device_cpu_percent%s)' % d, unit="percent",
+             thresholds=steps((GREEN, None), (AMBER, 70), (RED, 90))),
+        stat("Memory", 16, 0, 4, 'max(mist_device_memory_percent%s)' % d, unit="percent",
+             thresholds=steps((GREEN, None), (AMBER, 80), (RED, 92))),
+        stat("Last seen", 20, 0, 4, '(time() - max(mist_device_last_seen_timestamp_seconds%s)) * 1000' % d,
+             "Time since Mist last heard from the device.", unit="dtdurations"),
+
+        table("Identity", 0, 4, 24, 3,
+              [target('mist_device_info%s' % d, fmt="table", instant=True)],
+              hide=("Value",), rename={"name": "Device", "site": "Site", "type": "Type", "model": "Model",
+                                       "version": "Firmware", "ip": "IP", "mac": "MAC"},
+              order=["Device", "Site", "Type", "Model", "Firmware", "IP", "MAC"]),
+
+        panel("state-timeline", "Connection state", 0, 7, 24, 4, [target('max(mist_device_up%s)' % d, "state")],
+              "Up/down history for this device.", thresholds=steps((RED, None), (GREEN, 1)), mappings=UP_MAP,
+              options={"showValue": "never", "mergeValues": True, "rowHeight": 0.8,
+                       "legend": {"showLegend": False}, "tooltip": {"mode": "single"}}),
+        timeseries("CPU", 0, 11, 12, 8, [target('mist_device_cpu_percent%s' % d, "CPU")],
+                   unit="percent", max_=100),
+        timeseries("Memory", 12, 11, 12, 8, [target('mist_device_memory_percent%s' % d, "Memory")],
+                   unit="percent", max_=100),
+        timeseries("Clients by band", 0, 19, 12, 8,
+                   [target('mist_ap_band_clients%s' % d, "{{band}} GHz")], "Access points only.", stack=True),
+        timeseries("Uptime", 12, 19, 12, 8, [target('mist_device_uptime_seconds%s' % d, "uptime")],
+                   "A drop to zero is a reboot.", unit="s"),
+        timeseries("PoE draw", 0, 27, 24, 8,
+                   [target('mist_switch_poe_draw_watts%s' % d, "drawn"),
+                    target('mist_switch_poe_budget_watts%s' % d, "budget", ref="B")],
+                   "Switches that report PoE only.", unit="watt"),
+    ]
+    link_columns(p, "Identity", {"Site": _link("Open site",
+                                                '/d/mist-site?var-site=${__data.fields["Site"]:percentencode}')})
+    return dashboard("mist-device", "Mist Device", p,
+                     [variable("device", "Device", "label_values(mist_device_up, name)", include_all=False)],
+                     "One device: state, load, clients and history.")
+
+
 def build():
-    return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load()}
+    return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
+            "mist-site.json": site_view(), "mist-device.json": device_view()}
 
 
 def render(d):

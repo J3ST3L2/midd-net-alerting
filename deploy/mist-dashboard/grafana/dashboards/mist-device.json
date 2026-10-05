@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Fleet health and alarms across the Juniper Mist org.",
+  "description": "One device: state, load, clients and history.",
   "editable": false,
   "graphTooltip": 1,
   "links": [
@@ -23,19 +23,38 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "APs, switches and gateways in the org.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "Down"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "Up"
+                }
+              },
+              "type": "value"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
               }
             ]
           },
@@ -51,7 +70,7 @@
       },
       "id": 1,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
           "calcs": [
@@ -68,14 +87,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(mist_device_up{site=~\"$site\"})",
+          "expr": "max(mist_device_up{name=\"$device\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Devices",
+      "title": "Status",
       "type": "stat"
     },
     {
@@ -94,12 +113,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
           },
-          "unit": "none"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -128,14 +147,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_device_up{site=~\"$site\"})",
+          "expr": "max(mist_device_uptime_seconds{name=\"$device\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Connected",
+      "title": "Uptime",
       "type": "stat"
     },
     {
@@ -143,7 +162,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Devices Mist reports as not connected.",
+      "description": "Access points only.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -154,12 +173,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
               }
             ]
           },
@@ -175,7 +190,7 @@
       },
       "id": 3,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
           "calcs": [
@@ -192,14 +207,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(mist_device_up{site=~\"$site\"} == 0) or vector(0)",
+          "expr": "sum(mist_ap_clients{name=\"$device\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Disconnected",
+      "title": "Clients",
       "type": "stat"
     },
     {
@@ -207,7 +222,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unresolved critical alarm records in the last 24 hours. Device down/up pairs are not closed by Mist, so use Disconnected for current device state.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -222,12 +237,16 @@
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 70
+              },
+              {
                 "color": "red",
-                "value": 1
+                "value": 90
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -256,14 +275,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_alarms{site=~\"$site\",state=\"open\",severity=\"critical\"}) or vector(0)",
+          "expr": "max(mist_device_cpu_percent{name=\"$device\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Critical alarms (24 h)",
+      "title": "CPU",
       "type": "stat"
     },
     {
@@ -282,12 +301,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 92
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -316,14 +343,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_ap_clients{site=~\"$site\"})",
+          "expr": "max(mist_device_memory_percent{name=\"$device\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Wireless clients",
+      "title": "Memory",
       "type": "stat"
     },
     {
@@ -331,7 +358,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Seconds since the exporter last refreshed device data from Mist.",
+      "description": "Time since Mist last heard from the device.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -342,20 +369,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
-              },
-              {
-                "color": "orange",
-                "value": 180
-              },
-              {
-                "color": "red",
-                "value": 600
               }
             ]
           },
-          "unit": "s"
+          "unit": "dtdurations"
         },
         "overrides": []
       },
@@ -367,7 +386,7 @@
       },
       "id": 6,
       "options": {
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {
           "calcs": [
@@ -384,14 +403,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "time() - min(mist_exporter_last_success_timestamp_seconds{source=\"devices\"})",
+          "expr": "(time() - max(mist_device_last_seen_timestamp_seconds{name=\"$device\"})) * 1000",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Data age",
+      "title": "Last seen",
       "type": "stat"
     },
     {
@@ -399,21 +418,199 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Count of devices Mist reports as not connected, by type.",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Site"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Open site",
+                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_device_info{name=\"$device\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Identity",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true
+            },
+            "indexByName": {
+              "Device": 0,
+              "Firmware": 4,
+              "IP": 5,
+              "MAC": 6,
+              "Model": 3,
+              "Site": 1,
+              "Type": 2
+            },
+            "renameByName": {
+              "ip": "IP",
+              "mac": "MAC",
+              "model": "Model",
+              "name": "Device",
+              "site": "Site",
+              "type": "Type",
+              "version": "Firmware"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Up/down history for this device.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "Down"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "Up"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(mist_device_up{name=\"$device\"})",
+          "format": "time_series",
+          "legendFormat": "state",
+          "refId": "A"
+        }
+      ],
+      "title": "Connection state",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 18,
+            "fillOpacity": 8,
             "lineWidth": 2,
             "showPoints": "never",
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             }
           },
+          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -424,7 +621,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -432,9 +629,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 11
       },
-      "id": 7,
+      "id": 9,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -452,13 +649,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (type) (mist_device_up{site=~\"$site\"} == 0) or vector(0)",
+          "expr": "mist_device_cpu_percent{name=\"$device\"}",
           "format": "time_series",
-          "legendFormat": "{{type}}",
+          "legendFormat": "CPU",
           "refId": "A"
         }
       ],
-      "title": "Disconnected devices",
+      "title": "CPU",
       "type": "timeseries"
     },
     {
@@ -466,12 +663,23 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Devices Mist currently reports as not connected, and how long since Mist last heard from them.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -480,237 +688,28 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Down for"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Device"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open device",
-                    "url": "/d/mist-device?var-device=${__data.fields[\"Device\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Site"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open site",
-                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 4
-      },
-      "id": 8,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Down for"
-          }
-        ]
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "(time() - mist_device_last_seen_timestamp_seconds) and on(mac) (mist_device_up{site=~\"$site\"} == 0)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Disconnected now",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "instance": true,
-              "job": true,
-              "mac": true
-            },
-            "indexByName": {
-              "Device": 0,
-              "Down for": 4,
-              "Model": 3,
-              "Site": 1,
-              "Type": 2
-            },
-            "renameByName": {
-              "Value": "Down for",
-              "model": "Model",
-              "name": "Device",
-              "site": "Site",
-              "type": "Type"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Total devices per site.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "links": [
-            {
-              "targetBlank": false,
-              "title": "Open site",
-              "url": "/d/mist-site?var-site=${__field.labels.site:percentencode}"
-            }
-          ],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 0,
-        "y": 12
-      },
-      "id": 9,
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sort_desc(count by (site) (mist_device_up{site=~\"$site\"}))",
-          "format": "time_series",
-          "instant": true,
-          "legendFormat": "{{site}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Devices by site",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Devices not connected, per site.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "links": [
-            {
-              "targetBlank": false,
-              "title": "Open site",
-              "url": "/d/mist-site?var-site=${__field.labels.site:percentencode}"
-            }
-          ],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 8,
-        "y": 12
+        "y": 11
       },
       "id": 10,
       "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "showUnfilled": true
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
@@ -718,209 +717,21 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(count by (site) (mist_device_up{site=~\"$site\"} == 0))",
+          "expr": "mist_device_memory_percent{name=\"$device\"}",
           "format": "time_series",
-          "instant": true,
-          "legendFormat": "{{site}}",
+          "legendFormat": "Memory",
           "refId": "A"
         }
       ],
-      "title": "Disconnected by site",
-      "type": "bargauge"
+      "title": "Memory",
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unresolved alarm records in the last 24 hours, by site, severity and type.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Site"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open site",
-                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 16,
-        "y": 12
-      },
-      "id": 11,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Alarms"
-          }
-        ]
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sort_desc(sum by (site, severity, type) (mist_alarms{site=~\"$site\",state=\"open\"}))",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Open alarms (24 h)",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "group": true,
-              "instance": true,
-              "job": true,
-              "state": true
-            },
-            "indexByName": {
-              "Alarms": 3,
-              "Severity": 1,
-              "Site": 0,
-              "Type": 2
-            },
-            "renameByName": {
-              "Value": "Alarms",
-              "severity": "Severity",
-              "site": "Site",
-              "type": "Type"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Device count per model and firmware version, to spot stragglers after an upgrade.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 21
-      },
-      "id": 12,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Devices"
-          }
-        ]
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "count by (type, model, version) (mist_device_info{site=~\"$site\"})",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Firmware",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "instance": true,
-              "ip": true,
-              "job": true,
-              "mac": true,
-              "name": true,
-              "site": true
-            },
-            "indexByName": {
-              "Devices": 3,
-              "Firmware": 2,
-              "Model": 1,
-              "Type": 0
-            },
-            "renameByName": {
-              "Value": "Devices",
-              "model": "Model",
-              "type": "Type",
-              "version": "Firmware"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Alarm records in the trailing 24 hour window, open and resolved.",
+      "description": "Access points only.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -952,8 +763,142 @@
       "gridPos": {
         "h": 8,
         "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_ap_band_clients{name=\"$device\"}",
+          "format": "time_series",
+          "legendFormat": "{{band}} GHz",
+          "refId": "A"
+        }
+      ],
+      "title": "Clients by band",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "A drop to zero is a reboot.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
         "x": 12,
-        "y": 21
+        "y": 19
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_device_uptime_seconds{name=\"$device\"}",
+          "format": "time_series",
+          "legendFormat": "uptime",
+          "refId": "A"
+        }
+      ],
+      "title": "Uptime",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Switches that report PoE only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 27
       },
       "id": 13,
       "options": {
@@ -973,13 +918,23 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (severity) (mist_alarms{site=~\"$site\"})",
+          "expr": "mist_switch_poe_draw_watts{name=\"$device\"}",
           "format": "time_series",
-          "legendFormat": "{{severity}}",
+          "legendFormat": "drawn",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_switch_poe_budget_watts{name=\"$device\"}",
+          "format": "time_series",
+          "legendFormat": "budget",
+          "refId": "B"
         }
       ],
-      "title": "Alarms by severity (24 h window)",
+      "title": "PoE draw",
       "type": "timeseries"
     }
   ],
@@ -991,22 +946,16 @@
   "templating": {
     "list": [
       {
-        "allValue": ".*",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "includeAll": true,
-        "label": "Site",
-        "multi": true,
-        "name": "site",
+        "includeAll": false,
+        "label": "Device",
+        "multi": false,
+        "name": "device",
         "query": {
-          "query": "label_values(mist_device_up, site)",
+          "query": "label_values(mist_device_up, name)",
           "refId": "v"
         },
         "refresh": 2,
@@ -1020,7 +969,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Mist Overview",
-  "uid": "mist-overview",
+  "title": "Mist Device",
+  "uid": "mist-device",
   "version": 1
 }
