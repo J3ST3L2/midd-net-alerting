@@ -64,6 +64,28 @@ class MistClient:
                 return out
         raise MistError("device stats exceeded 50 pages; refusing partial result")
 
+    def list_site_stats(self):
+        """Raw org site stats rows (per-site client and device counts)."""
+        out, page_size = [], 1000
+        for page in range(1, 11):
+            body = self._get(self._url("/orgs/%s/stats/sites" % self.org_id,
+                                       {"limit": page_size, "page": page}))
+            if not isinstance(body, list):
+                raise MistError("unexpected site stats response shape")
+            out.extend(r for r in body if isinstance(r, dict))
+            if len(body) < page_size:
+                return out
+        raise MistError("site stats exceeded 10 pages; refusing partial result")
+
+    def client_counts(self, distinct, duration):
+        """Wireless clients seen in the last `duration`, grouped by `distinct` (ap, band, ssid).
+        Mist caps the result list at `limit`, so a long group list may omit its smallest entries."""
+        body = self._get(self._url("/orgs/%s/clients/count" % self.org_id,
+                                   {"distinct": distinct, "duration": duration, "limit": 1000}))
+        if not isinstance(body, dict) or not isinstance(body.get("results"), list):
+            raise MistError("unexpected client count response shape")
+        return [r for r in body["results"] if isinstance(r, dict)]
+
     def search_alarms(self, start, end):
         """All alarms in [start, end]. Raises if any page fails or pages are cut off."""
         url = self._url("/orgs/%s/alarms/search" % self.org_id,

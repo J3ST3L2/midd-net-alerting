@@ -316,7 +316,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_ap_clients{site=~\"$site\"})",
+          "expr": "sum(mist_site_clients{site=~\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",

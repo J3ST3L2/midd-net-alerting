@@ -23,7 +23,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "",
+      "description": "Wireless clients seen in the last 10 minutes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -68,7 +68,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_ap_clients{site=~\"$site\"})",
+          "expr": "sum(mist_site_clients{site=~\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -83,7 +83,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "APs reporting client counts.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -128,7 +128,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(mist_ap_clients{site=~\"$site\"})",
+          "expr": "count(mist_device_up{type=\"ap\",site=~\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -143,7 +143,71 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Highest client count on a single AP.",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(mist_device_up{type=\"ap\",site=~\"$site\"} == 0) or vector(0)",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "APs offline",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Highest client count on a single AP. Per-AP counts cover the busiest ~1000 APs.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -166,10 +230,10 @@
       "gridPos": {
         "h": 4,
         "w": 6,
-        "x": 12,
+        "x": 18,
         "y": 0
       },
-      "id": 3,
+      "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -196,107 +260,6 @@
         }
       ],
       "title": "Busiest AP",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "APs running reduced because their switch port cannot supply full power.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "AP"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open device",
-                    "url": "/d/mist-device?var-device=${__data.fields[\"AP\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Site"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open site",
-                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum(mist_ap_power_constrained{site=~\"$site\"}) or vector(0)",
-          "format": "time_series",
-          "instant": true,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Power-constrained APs",
       "type": "stat"
     },
     {
@@ -357,7 +320,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (site) (mist_ap_clients{site=~\"$site\"})",
+          "expr": "mist_site_clients{site=~\"$site\"}",
           "format": "time_series",
           "legendFormat": "{{site}}",
           "refId": "A"
@@ -371,7 +334,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Clients per radio band across the selected sites.",
+      "description": "Whole org, not filtered by site.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -424,9 +387,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (band) (mist_ap_band_clients{site=~\"$site\"})",
+          "expr": "mist_clients_by_band",
           "format": "time_series",
-          "legendFormat": "{{band}} GHz",
+          "legendFormat": "{{band}}",
           "refId": "A"
         }
       ],
@@ -565,7 +528,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(sum by (site) (mist_ap_clients{site=~\"$site\"}))",
+          "expr": "sort_desc(mist_site_clients{site=~\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "{{site}}",
@@ -580,7 +543,67 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Empty is good. Check the switch port PoE budget for anything listed.",
+      "description": "Whole org, not filtered by site.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 9,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(mist_clients_by_ssid)",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "{{ssid}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Clients by SSID",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Access points Mist reports as not connected, and how long since Mist last heard from them.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -596,19 +619,73 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Down for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AP"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Open device",
+                    "url": "/d/mist-device?var-device=${__data.fields[\"AP\"]:percentencode}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Site"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Open site",
+                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
+        "h": 8,
+        "w": 12,
+        "x": 12,
         "y": 23
       },
-      "id": 9,
+      "id": 10,
       "options": {
         "cellHeight": "sm",
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Down for"
+          }
+        ]
       },
       "targets": [
         {
@@ -616,36 +693,37 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_ap_power_constrained{site=~\"$site\"} == 1",
+          "expr": "(time() - mist_device_last_seen_timestamp_seconds) and on(mac) (mist_device_up{type=\"ap\",site=~\"$site\"} == 0)",
           "format": "table",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Power-constrained APs",
+      "title": "Offline access points",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": {
               "Time": true,
-              "Value": true,
               "__name__": true,
               "instance": true,
               "job": true,
-              "mac": true
+              "mac": true,
+              "type": true
             },
             "indexByName": {
               "AP": 0,
+              "Down for": 3,
               "Model": 2,
               "Site": 1
             },
             "renameByName": {
+              "Value": "Down for",
               "model": "Model",
               "name": "AP",
-              "site": "Site",
-              "type": "Type"
+              "site": "Site"
             }
           }
         }
