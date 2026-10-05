@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Wireless client load across the Mist org.",
+  "description": "One site: its devices, clients, load and alarms.",
   "editable": false,
   "graphTooltip": 1,
   "links": [
@@ -41,11 +41,30 @@
           },
           "unit": "none"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Device"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": false,
+                    "title": "Open device",
+                    "url": "/d/mist-device?var-device=${__data.fields[\"Device\"]:percentencode}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 0
       },
@@ -68,14 +87,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_ap_clients{site=~\"$site\"})",
+          "expr": "count(mist_device_up{site=\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Clients",
+      "title": "Devices",
       "type": "stat"
     },
     {
@@ -83,7 +102,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "APs reporting client counts.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -94,8 +113,12 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
               }
             ]
           },
@@ -105,13 +128,13 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 5,
         "y": 0
       },
       "id": 2,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
         "reduceOptions": {
           "calcs": [
@@ -128,14 +151,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(mist_ap_clients{site=~\"$site\"})",
+          "expr": "count(mist_device_up{site=\"$site\"} == 0) or vector(0)",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Access points",
+      "title": "Disconnected",
       "type": "stat"
     },
     {
@@ -143,7 +166,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Highest client count on a single AP.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -165,8 +188,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 0
       },
       "id": 3,
@@ -188,14 +211,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(mist_ap_clients{site=~\"$site\"})",
+          "expr": "sum(mist_ap_clients{site=\"$site\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Busiest AP",
+      "title": "Wireless clients",
       "type": "stat"
     },
     {
@@ -203,7 +226,71 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "APs running reduced because their switch port cannot supply full power.",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(mist_alarms{site=\"$site\",state=\"open\",severity=\"critical\"}) or vector(0)",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Critical alarms (24 h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -225,52 +312,15 @@
           },
           "unit": "none"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "AP"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open device",
-                    "url": "/d/mist-device?var-device=${__data.fields[\"AP\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Site"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "targetBlank": false,
-                    "title": "Open site",
-                    "url": "/d/mist-site?var-site=${__data.fields[\"Site\"]:percentencode}"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 20,
         "y": 0
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -289,7 +339,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_ap_power_constrained{site=~\"$site\"}) or vector(0)",
+          "expr": "sum(mist_ap_power_constrained{site=\"$site\"}) or vector(0)",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -304,22 +354,12 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Wireless clients per site.",
+      "description": "Every device at this site. Click a name to open it.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "fillOpacity": 18,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
-          },
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -328,86 +368,257 @@
                 "value": null
               }
             ]
-          },
-          "unit": "none"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "red",
+                        "text": "Down"
+                      },
+                      "1": {
+                        "color": "green",
+                        "text": "Up"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Uptime"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 16,
+        "h": 12,
+        "w": 24,
         "x": 0,
-        "y": 4
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (site) (mist_ap_clients{site=~\"$site\"})",
-          "format": "time_series",
-          "legendFormat": "{{site}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Clients over time",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Clients per radio band across the selected sites.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 18,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 16,
         "y": 4
       },
       "id": 6,
       "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Status"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac) (mist_device_up{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac) (mist_device_uptime_seconds{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac) (mist_ap_clients{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac) (mist_device_cpu_percent{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac) (mist_device_memory_percent{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (name, type, model, mac, version) (mist_device_info{site=\"$site\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "F"
+        }
+      ],
+      "title": "Devices",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "mac": true
+            },
+            "indexByName": {
+              "CPU": 5,
+              "Clients": 4,
+              "Device": 0,
+              "Firmware": 8,
+              "Memory": 6,
+              "Model": 2,
+              "Status": 3,
+              "Type": 1,
+              "Uptime": 7
+            },
+            "renameByName": {
+              "Value #A": "Status",
+              "Value #B": "Uptime",
+              "Value #C": "Clients",
+              "Value #D": "CPU",
+              "Value #E": "Memory",
+              "model": "Model",
+              "name": "Device",
+              "type": "Type",
+              "version": "Firmware"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Wireless clients on each AP at this site.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 7,
+      "options": {
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
@@ -424,13 +635,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (band) (mist_ap_band_clients{site=~\"$site\"})",
+          "expr": "mist_ap_clients{site=\"$site\"}",
           "format": "time_series",
-          "legendFormat": "{{band}} GHz",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
-      "title": "Clients by band",
+      "title": "Clients per AP",
       "type": "timeseries"
     },
     {
@@ -438,126 +649,53 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "The 15 APs with the most clients right now.",
+      "description": "CPU utilization of every device at this site.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "links": [
-            {
-              "targetBlank": false,
-              "title": "Open device",
-              "url": "/d/mist-device?var-device=${__field.labels.name:percentencode}"
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
             }
-          ],
+          },
+          "max": 100,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 40
-              },
-              {
-                "color": "red",
-                "value": 60
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 13
-      },
-      "id": 7,
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "topk(15, mist_ap_clients{site=~\"$site\"})",
-          "format": "time_series",
-          "instant": true,
-          "legendFormat": "{{name}} ({{site}})",
-          "refId": "A"
-        }
-      ],
-      "title": "Busiest APs",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Current clients per site.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "links": [
-            {
-              "targetBlank": false,
-              "title": "Open site",
-              "url": "/d/mist-site?var-site=${__field.labels.site:percentencode}"
-            }
-          ],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
+                "color": "green",
                 "value": null
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 13
+        "y": 16
       },
       "id": 8,
       "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "showUnfilled": true
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
@@ -565,22 +703,21 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(sum by (site) (mist_ap_clients{site=~\"$site\"}))",
+          "expr": "mist_device_cpu_percent{site=\"$site\"}",
           "format": "time_series",
-          "instant": true,
-          "legendFormat": "{{site}}",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
-      "title": "Clients by site",
-      "type": "bargauge"
+      "title": "CPU",
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Empty is good. Check the switch port PoE budget for anything listed.",
+      "description": "Unresolved alarm records for this site in the last 24 hours.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -599,16 +736,21 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 24
       },
       "id": 9,
       "options": {
         "cellHeight": "sm",
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Alarms"
+          }
+        ]
       },
       "targets": [
         {
@@ -616,35 +758,35 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_ap_power_constrained{site=~\"$site\"} == 1",
+          "expr": "sort_desc(sum by (severity, type) (mist_alarms{site=\"$site\",state=\"open\"}))",
           "format": "table",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Power-constrained APs",
+      "title": "Open alarms (24 h)",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": {
               "Time": true,
-              "Value": true,
               "__name__": true,
+              "group": true,
               "instance": true,
               "job": true,
-              "mac": true
+              "site": true,
+              "state": true
             },
             "indexByName": {
-              "AP": 0,
-              "Model": 2,
-              "Site": 1
+              "Alarms": 2,
+              "Severity": 0,
+              "Type": 1
             },
             "renameByName": {
-              "model": "Model",
-              "name": "AP",
-              "site": "Site",
+              "Value": "Alarms",
+              "severity": "Severity",
               "type": "Type"
             }
           }
@@ -661,19 +803,13 @@
   "templating": {
     "list": [
       {
-        "allValue": ".*",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "includeAll": true,
+        "includeAll": false,
         "label": "Site",
-        "multi": true,
+        "multi": false,
         "name": "site",
         "query": {
           "query": "label_values(mist_device_up, site)",
@@ -690,7 +826,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Mist Wireless",
-  "uid": "mist-wireless",
+  "title": "Mist Site",
+  "uid": "mist-site",
   "version": 1
 }

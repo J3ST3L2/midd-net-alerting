@@ -165,6 +165,13 @@
           "color": {
             "mode": "thresholds"
           },
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Open device",
+              "url": "/d/mist-device?var-device=${__field.labels.name:percentencode}"
+            }
+          ],
           "max": 100,
           "min": 0,
           "thresholds": {
@@ -234,6 +241,13 @@
           "color": {
             "mode": "thresholds"
           },
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Open device",
+              "url": "/d/mist-device?var-device=${__field.labels.name:percentencode}"
+            }
+          ],
           "max": 100,
           "min": 0,
           "thresholds": {
@@ -303,6 +317,13 @@
           "color": {
             "mode": "thresholds"
           },
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Open device",
+              "url": "/d/mist-device?var-device=${__field.labels.name:percentencode}"
+            }
+          ],
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -367,6 +388,13 @@
           "color": {
             "mode": "thresholds"
           },
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Open device",
+              "url": "/d/mist-device?var-device=${__field.labels.name:percentencode}"
+            }
+          ],
           "max": 100,
           "min": 0,
           "thresholds": {
