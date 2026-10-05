@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # The exporter serves a cached snapshot, so scraping never calls the Mist API.
+  - job_name: mist
+    static_configs:
+      - targets: ["exporter:9877"]

@@ -1,0 +1,111 @@
+# Mist telemetry dashboard: exporter -> Prometheus -> Grafana.
+#
+# Self-contained and host-independent: bridge network, named volumes, relative paths. To move it
+# to another VM, clone the repo there, copy ./.env and ./secrets, and bring the stack up
+# (see README, "Moving to its own VM").
+#
+# Only Grafana is reachable from the host, on loopback; put a reverse proxy in front of it.
+
+name: mist-dashboard
+
+services:
+  exporter:
+    build: ../../mist-dashboard/exporter
+    image: midd-mist-exporter:local
+    container_name: mist-exporter
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MIST_API_HOST: ${MIST_API_HOST:-api.mist.com}
+      MIST_ORG_ID: ${MIST_ORG_ID:?set MIST_ORG_ID in .env}
+      MIST_API_TOKEN_FILE: /run/secrets/mist_api_token
+    secrets:
+      - mist_api_token
+    networks:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: mist-prometheus
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-180d}
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - exporter
+    networks:
+      - backend
+
+  grafana:
+    image: grafana/grafana-oss:12.2.0
+    container_name: mist-grafana
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-true}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/mist-overview.json
+    secrets:
+      - grafana_admin_password
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      - prometheus
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+secrets:
+  mist_api_token:
+    file: ./secrets/mist-api-token
+  grafana_admin_password:
+    file: ./secrets/grafana-admin-password
