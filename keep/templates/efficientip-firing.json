@@ -1,0 +1,15 @@
+[
+  {
+    "name": "TEST-SOLIDserver: dhcp_shared_network_utilization",
+    "status": "firing",
+    "severity": "critical",
+    "source": ["efficientip"],
+    "fingerprint": "efficientip:test-solidserver:dhcp_shared_network_utilization:test-shared-net",
+    "hostname": "TEST-SOLIDserver",
+    "ip": "192.0.2.10",
+    "event": "dhcp_shared_network_utilization",
+    "object": "test-shared-net",
+    "message": "TEST ONLY: shared network test-shared-net has 4% free addresses (threshold 10%)",
+    "lastReceived": "2026-10-07T20:00:00Z"
+  }
+]
