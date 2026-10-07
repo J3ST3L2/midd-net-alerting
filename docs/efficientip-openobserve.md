@@ -58,9 +58,19 @@ relying on them. An unresolved placeholder shows up literally in the card.
 
 ## 3. The alerts
 
+**Measured on 2026-10-07:** the stream is `network_syslog` (one stream, ~1.6B events). DHCP and DNS log from
+`hera.middlebury.edu` and `lion.middlebury.edu` (lion is believed to be zeus; **zeus does not appear under its
+own name**: confirm). `juno` and `jupiter` are the management appliances.
+
+**Do not alert on the raw pattern `no free leases`.** About 27,000 lines a day match it: hera and lion answer
+DHCPDISCOVER on their own interface for the built-in `default-netv4` network, which has no scope. The catalog
+query excludes it. With the exclusion there were only 6 events in 30 days, 5 of them a genuine burst on
+2026-09-28 (`cancel load balance to peer failover-dhcp1-smart… - no free leases`, relay 140.233.107.1).
+
+
 `openobserve/efficientip-alert-catalog.json` lists the alerts (name, SQL, period, frequency,
-threshold). Replace `<STREAM>` with the stream holding the SOLIDserver logs. Start with
-**DHCP Lease Exhaustion**; enable the others once their queries are checked against real log lines.
+threshold). Start with **DHCP Lease Exhaustion** (`enable: true` in the catalog); the other three are `enable: false` until their
+wording is checked against a real failure line.
 
 DHCP and shared networks: `dhcpd` logs `network <name>: no free leases` per network, so a match means a
 client really could not get an address on that network. That is better than a percent-used threshold,

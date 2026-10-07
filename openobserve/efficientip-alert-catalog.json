@@ -1,37 +1,46 @@
 {
-  "_comment": "Alert definitions to create in OpenObserve (Alerts -> Add alert). Replace <STREAM> with the stream that holds the SOLIDserver logs. Each alert is created twice: a firing alert (this query, threshold as listed, shared template 'keep-efficientip-firing') and a cleared alert named '<alert_name> (cleared)' (same query, threshold 'less than 1', using its own cleared template whose fingerprint hard-codes '<alert_name>'). See docs/efficientip-openobserve.md. Ported from the old Graylog catalog.",
+  "_comment": "Alert definitions to create in OpenObserve (Alerts -> Add alert). Stream: network_syslog (the only stream; ~1.6B events). Fields seen on EfficientIP rows: host, hostname, device, appname (dhcpd, named, ipmserver, ...), facility, collector, message. DHCP and DNS run on hera.middlebury.edu and lion.middlebury.edu (lion is believed to be zeus; juno and jupiter are the management appliances). Each alert is created twice: a firing alert (this query, shared template 'keep-efficientip-firing') and a cleared alert named '<alert_name> (cleared)' (same query, threshold 'less than 1', using its own cleared template whose fingerprint hard-codes '<alert_name>'). See docs/efficientip-openobserve.md. Query results below were measured against real data on 2026-10-07.",
+  "hosts": [
+    "hera.middlebury.edu",
+    "lion.middlebury.edu"
+  ],
   "alerts": [
     {
       "alert_name": "DHCP Lease Exhaustion",
-      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE match_all('no free leases') ORDER BY _timestamp DESC LIMIT 1",
-      "period_minutes": 5,
-      "frequency_minutes": 1,
-      "threshold": ">= 1",
-      "note": "dhcpd logs 'network <name>: no free leases' per network, so this already fires on real exhaustion at the shared-network level. The card shows the most recent matching line."
-    },
-    {
-      "alert_name": "DHCP Service Failed or Stopped",
-      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE match_all('dhcpd') AND (match_all('exiting') OR match_all('failed') OR match_all('not running')) ORDER BY _timestamp DESC LIMIT 1",
-      "period_minutes": 5,
-      "frequency_minutes": 1,
-      "threshold": ">= 1",
-      "note": "Starting query ported from the Graylog catalog; tune against real log lines before enabling."
-    },
-    {
-      "alert_name": "DNS Service Failed or Stopped",
-      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE (match_all('named') OR match_all('bind')) AND match_all('failed') AND match_all('exiting') ORDER BY _timestamp DESC LIMIT 1",
-      "period_minutes": 5,
-      "frequency_minutes": 1,
-      "threshold": ">= 1",
-      "note": "Tune against real log lines before enabling."
-    },
-    {
-      "alert_name": "DNS Zone Load Failure",
-      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE (match_all('named') OR match_all('bind')) AND match_all('zone') AND (match_all('not loaded') OR match_all('has errors') OR match_all('loading failed')) ORDER BY _timestamp DESC LIMIT 1",
+      "enable": true,
+      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('no free leases') AND message NOT LIKE '%default-netv4%' AND message NOT LIKE '%efault-netv4%' ORDER BY _timestamp DESC LIMIT 1",
       "period_minutes": 10,
       "frequency_minutes": 1,
       "threshold": ">= 1",
-      "note": "Ported from the Graylog catalog."
+      "measured": "WITHOUT the default-netv4 exclusion this matches ~27,000 lines/day (hera and lion answering DHCPDISCOVER on their own interface for the built-in default-netv4 network): never alert on the raw pattern. WITH the exclusions: 6 events in 30 days, 5 of them a real burst on 2026-09-28 10:07 on hera (relay 140.233.107.1, 'cancel load balance to peer failover-dhcp1-smart.middlebury.edu - no free leases').",
+      "note": "dhcpd logs the network name, so this is already per shared network. The card shows the most recent matching line."
+    },
+    {
+      "alert_name": "DHCP Service Failed or Stopped",
+      "enable": false,
+      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND (match_all('exiting') OR match_all('failed') OR match_all('not running')) ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 5,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "measured": "1 match in 30 days. Quiet enough, but read that one line first to confirm it is a real fault pattern before enabling."
+    },
+    {
+      "alert_name": "DNS Service Failed or Stopped",
+      "enable": false,
+      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('failed') AND match_all('exiting') ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 5,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "measured": "0 matches in 30 days. named does log from both hosts (about 2.4M and 1.3M lines/day), so silence may just mean nothing broke, but the wording is unverified. Find a real named failure line before relying on this."
+    },
+    {
+      "alert_name": "DNS Zone Load Failure",
+      "enable": false,
+      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('zone') AND (match_all('not loaded') OR match_all('has errors') OR match_all('loading failed')) ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 10,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "measured": "0 matches in 30 days. Same caveat as DNS Service Failed: wording unverified."
     }
   ]
 }
