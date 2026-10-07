@@ -44,3 +44,26 @@ repeated failed logins can lock the account or make the appliance answer 503. Be
    that `keep-readonly` is enabled, not locked/expired, and in a group that is allowed to use the API.
 2. Confirm the password by logging in to the console as `keep-readonly`.
 3. Re-save the password file if in doubt (step 2 above), then run the probe once.
+
+## API tokens (what this appliance expects)
+
+Password logins to the REST API were refused here (401) even for a full admin, and SSO users such as
+your own account cannot use a password for the API at all. SOLIDserver's API tokens are the intended
+route. A token has an **Access Key** and a **Secret** (the secret is shown only once).
+
+1. In the console open **Administration -> Authentication & Security -> Users -> `keep-readonly`**
+   and use **All API tokens** to create one. Copy the Access Key and the Secret immediately.
+2. Save them into root-only files on Gravitron (silent prompts, nothing is echoed):
+
+```bash
+sudo sh -c 'umask 077; printf "Access Key: "; read -rs K; echo; printf %s "$K" > /opt/stacks/efficientip-poller/secrets/solid-token-id'
+sudo sh -c 'umask 077; printf "Secret: "; read -rs S; echo; printf %s "$S" > /opt/stacks/efficientip-poller/secrets/solid-token-secret'
+```
+
+3. Run the probe with token auth:
+
+```bash
+sudo SOLID_AUTH=token SOLID_HOST=juno-eip.middlebury.edu      SOLID_TOKEN_ID_FILE=/opt/stacks/efficientip-poller/secrets/solid-token-id      SOLID_TOKEN_SECRET_FILE=/opt/stacks/efficientip-poller/secrets/solid-token-secret      SOLID_DISCOVERY_OUT=/opt/stacks/efficientip-poller/state/discovery      python3 /opt/stacks/keep-config/efficientip-poller/discovery/solid_discover.py
+```
+
+A token acts with the rights of its user, so after testing put `keep-readonly` back in a read-only group.

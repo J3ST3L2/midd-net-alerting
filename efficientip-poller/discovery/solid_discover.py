@@ -11,14 +11,19 @@ Config (environment variables):
   SOLID_PASSWORD_FILE   file containing that user's password (required)
   SOLID_CA_FILE         CA bundle if the appliance uses a private CA (optional)
   SOLID_INSECURE=1      skip TLS verification (testing only; noted in the report)
-  SOLID_AUTH            "ipm" (default: X-IPM-Username/X-IPM-Password headers) or "basic"
+  SOLID_AUTH            "token" (recommended), "ipm" (default: X-IPM-Username/X-IPM-Password
+                        headers) or "basic"
+  SOLID_TOKEN_ID_FILE      file with the API token's Access Key (for SOLID_AUTH=token)
+  SOLID_TOKEN_SECRET_FILE  file with the API token's Secret (for SOLID_AUTH=token)
   SOLID_DISCOVERY_OUT   output dir, default ./solid-discovery-out
 """
 import base64
+import hashlib
 import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -26,6 +31,8 @@ import urllib.request
 HOST = os.environ.get("SOLID_HOST", "").strip()
 USER = os.environ.get("SOLID_USER", "").strip()
 PW_FILE = os.environ.get("SOLID_PASSWORD_FILE", "").strip()
+TOKEN_ID_FILE = os.environ.get("SOLID_TOKEN_ID_FILE", "").strip()
+TOKEN_SECRET_FILE = os.environ.get("SOLID_TOKEN_SECRET_FILE", "").strip()
 CA_FILE = os.environ.get("SOLID_CA_FILE", "").strip()
 INSECURE = os.environ.get("SOLID_INSECURE", "") == "1"
 AUTH = os.environ.get("SOLID_AUTH", "ipm").strip().lower()
@@ -43,9 +50,23 @@ CANDIDATES = [
 ENUMISH = {"state", "status", "severity", "priority", "type", "condition", "enabled", "level"}
 
 
-def password():
-    with open(PW_FILE, encoding="utf-8") as f:
+def read_file(path):
+    with open(path, encoding="utf-8") as f:
         return f.read().strip()
+
+
+def password():
+    return read_file(PW_FILE)
+
+
+def token_headers(method, url, key_id, secret):
+    """SOLIDserver API token auth (as implemented in EfficientIP's own SOLIDserverRest client):
+    Authorization: SDS <key id>:<sha3-256 of secret, timestamp, method and URL>. The secret itself
+    is never sent."""
+    ts = int(time.time())
+    to_sign = "\n".join([secret, str(ts), method, url])
+    sig = hashlib.sha3_256(to_sign.encode()).hexdigest()
+    return {"Authorization": "SDS %s:%s" % (key_id, sig), "X-SDS-TS": str(ts)}
 
 
 def b64(s):
@@ -64,7 +85,9 @@ def ctx():
 def get(service, pw, limit=25):
     url = "https://%s/rest/%s?%s" % (HOST, service, urllib.parse.urlencode({"LIMIT": limit}))
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
-    if AUTH == "basic":
+    if AUTH == "token":
+        headers.update(token_headers("GET", url, pw[0], pw[1]))
+    elif AUTH == "basic":
         headers["Authorization"] = "Basic " + b64("%s:%s" % (USER, pw))
     else:
         headers["X-IPM-Username"] = b64(USER)
@@ -99,9 +122,14 @@ def redact(row):
 
 
 def main():
-    if not (HOST and USER and PW_FILE):
-        sys.exit("Set SOLID_HOST, SOLID_USER and SOLID_PASSWORD_FILE")
-    pw = password()
+    if AUTH == "token":
+        if not (HOST and TOKEN_ID_FILE and TOKEN_SECRET_FILE):
+            sys.exit("Set SOLID_HOST, SOLID_TOKEN_ID_FILE and SOLID_TOKEN_SECRET_FILE")
+        pw = (read_file(TOKEN_ID_FILE), read_file(TOKEN_SECRET_FILE))
+    else:
+        if not (HOST and USER and PW_FILE):
+            sys.exit("Set SOLID_HOST, SOLID_USER and SOLID_PASSWORD_FILE")
+        pw = password()
     report = {"host": "<configured>", "tls_verification": "OFF (testing)" if INSECURE else "on",
               "auth": AUTH, "services": {}}
     for svc in CANDIDATES:
