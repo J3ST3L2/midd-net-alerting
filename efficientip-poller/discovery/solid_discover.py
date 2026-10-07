@@ -33,11 +33,12 @@ OUT = os.environ.get("SOLID_DISCOVERY_OUT", "./solid-discovery-out")
 
 # Service names are guesses from the REST naming pattern; the probe tells us which are real.
 CANDIDATES = [
+    "member_list",   # always exists: doubles as the login check
     "alert_list", "alerts_list", "monitoring_alert_list", "alert_definition_list",
     "alert_def_list", "alert_group_list",
     "dhcp_server_list", "dhcp_scope_list", "dhcp_sharednetwork_list",
     "dhcp_shared_network_list", "dhcp_range_list", "dhcp_group_list",
-    "dns_server_list", "member_list",
+    "dns_server_list",
 ]
 ENUMISH = {"state", "status", "severity", "priority", "type", "condition", "enabled", "level"}
 
@@ -121,7 +122,14 @@ def main():
             entry["rows"] = 0
         else:
             entry["note"] = body if isinstance(body, str) else type(body).__name__
+            if isinstance(body, dict):
+                entry["body"] = json.dumps(body)[:300]
         report["services"][svc] = entry
+        if status in (401, 403, 503) and not entry.get("rows"):
+            report["stopped_early"] = (
+                "HTTP %s on '%s'. Stopped after ONE failed request so the account is not locked "
+                "by repeated attempts. Fix the login (see README) before running again." % (status, svc))
+            break
     os.makedirs(OUT, mode=0o700, exist_ok=True)
     path = os.path.join(OUT, "report.json")
     with open(path, "w", encoding="utf-8") as f:

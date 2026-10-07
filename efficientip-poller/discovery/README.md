@@ -34,3 +34,13 @@ If the appliance uses a private CA add `SOLID_CA_FILE=/path/to/ca.pem`. If you g
 Each candidate service shows `http_status` and either `rows` and `fields`, or an `error`. A service
 that returns rows with state/name fields is the one the poller will read. Review the output before
 sharing it: alert rows are printed, which is the point, but may contain server names.
+
+## If it stops with 401, 403 or 503
+
+The probe makes ONE request first (`member_list`) and stops if the login is rejected, because
+repeated failed logins can lock the account or make the appliance answer 503. Before running it again:
+
+1. In the SOLIDserver console open **Administration -> Authentication & Security -> Users** and check
+   that `keep-readonly` is enabled, not locked/expired, and in a group that is allowed to use the API.
+2. Confirm the password by logging in to the console as `keep-readonly`.
+3. Re-save the password file if in doubt (step 2 above), then run the probe once.
