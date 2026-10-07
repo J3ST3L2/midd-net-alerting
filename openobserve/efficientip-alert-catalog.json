@@ -1,0 +1,37 @@
+{
+  "_comment": "Alert definitions to create in OpenObserve (Alerts -> Add alert). Replace <STREAM> with the stream that holds the SOLIDserver logs. Each alert is created twice: a firing alert (this query, threshold as listed, shared template 'keep-efficientip-firing') and a cleared alert named '<alert_name> (cleared)' (same query, threshold 'less than 1', using its own cleared template whose fingerprint hard-codes '<alert_name>'). See docs/efficientip-openobserve.md. Ported from the old Graylog catalog.",
+  "alerts": [
+    {
+      "alert_name": "DHCP Lease Exhaustion",
+      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE match_all('no free leases') ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 5,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "note": "dhcpd logs 'network <name>: no free leases' per network, so this already fires on real exhaustion at the shared-network level. The card shows the most recent matching line."
+    },
+    {
+      "alert_name": "DHCP Service Failed or Stopped",
+      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE match_all('dhcpd') AND (match_all('exiting') OR match_all('failed') OR match_all('not running')) ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 5,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "note": "Starting query ported from the Graylog catalog; tune against real log lines before enabling."
+    },
+    {
+      "alert_name": "DNS Service Failed or Stopped",
+      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE (match_all('named') OR match_all('bind')) AND match_all('failed') AND match_all('exiting') ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 5,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "note": "Tune against real log lines before enabling."
+    },
+    {
+      "alert_name": "DNS Zone Load Failure",
+      "sql": "SELECT host, message FROM \"<STREAM>\" WHERE (match_all('named') OR match_all('bind')) AND match_all('zone') AND (match_all('not loaded') OR match_all('has errors') OR match_all('loading failed')) ORDER BY _timestamp DESC LIMIT 1",
+      "period_minutes": 10,
+      "frequency_minutes": 1,
+      "threshold": ">= 1",
+      "note": "Ported from the Graylog catalog."
+    }
+  ]
+}

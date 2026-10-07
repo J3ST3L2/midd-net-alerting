@@ -1,0 +1,13 @@
+[
+  {
+    "name": "EfficientIP: <ALERT NAME>",
+    "status": "resolved",
+    "severity": "info",
+    "source": ["efficientip"],
+    "fingerprint": "efficientip:openobserve:<ALERT NAME>",
+    "hostname": "SOLIDserver",
+    "event": "<ALERT NAME>",
+    "message": "No further matches in the last {alert_period} minute(s)",
+    "alert_url": "{alert_url}"
+  }
+]

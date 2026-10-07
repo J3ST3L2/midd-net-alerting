@@ -1,0 +1,15 @@
+[
+  {
+    "name": "EfficientIP: {alert_name}",
+    "status": "firing",
+    "severity": "critical",
+    "source": ["efficientip"],
+    "fingerprint": "efficientip:openobserve:{alert_name}",
+    "hostname": "{host}",
+    "event": "{alert_name}",
+    "object": "{stream_name}",
+    "message": "{message}",
+    "matches": "{alert_count} match(es) in the last {alert_period} minute(s)",
+    "alert_url": "{alert_url}"
+  }
+]

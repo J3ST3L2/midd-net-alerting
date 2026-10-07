@@ -69,6 +69,9 @@ Expected: one red `TEST-SOLIDserver ALERT` card that turns green in place, with 
 
 ## Open items
 
+- **Log-based alerts (DHCP/DNS) come from OpenObserve**, not SOLIDserver itself: see `docs/efficientip-openobserve.md`.
+- SOLIDserver alert definitions can only notify by email or SNMP trap, so they cannot post here directly.
+
 - What SOLIDserver can actually send (HTTP webhook body/format, or only syslog/SNMP). If it cannot
   post this JSON itself, the options are a Keep extraction/mapping rule, or LibreNMS.
 - Appliance IPs for the Nginx allowlist.
