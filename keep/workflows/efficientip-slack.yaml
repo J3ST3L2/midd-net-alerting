@@ -36,7 +36,7 @@ workflow:
                 - title: Object
                   value: "{{ alert.object }}"
                   short: true
-                - title: Appliance IP
+                - title: Relay / IP
                   value: "{{ alert.ip }}"
                   short: true
                 - title: Severity
@@ -71,7 +71,7 @@ workflow:
                 - title: Object
                   value: "{{ alert.object }}"
                   short: true
-                - title: Appliance IP
+                - title: Relay / IP
                   value: "{{ alert.ip }}"
                   short: true
                 - title: Severity

@@ -1,12 +1,14 @@
 [
   {
-    "name": "EfficientIP: <ALERT NAME>",
+    "name": "EfficientIP: <ALERT_NAME>",
     "status": "resolved",
     "severity": "info",
     "source": ["efficientip"],
-    "fingerprint": "efficientip:openobserve:<ALERT NAME>",
+    "fingerprint": "efficientip:openobserve:<ALERT_NAME>",
     "hostname": "SOLIDserver",
-    "event": "<ALERT NAME>",
+    "ip": "n/a",
+    "event": "<ALERT_NAME>",
+    "object": "dhcpd",
     "message": "No further matches in the last {alert_period} minute(s)",
     "alert_url": "{alert_url}"
   }
