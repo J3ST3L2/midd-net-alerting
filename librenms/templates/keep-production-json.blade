@@ -21,12 +21,16 @@
         }
     }
 
-    // On recovery there is no fault; LibreNMS cards do not need a reason line there.
+    // Only real fault text counts as a reason. Never echo the rule name (it duplicates the Issue line).
+    // On recovery LibreNMS has no faults, so the workflow shows the reason saved when the alert fired.
     if ($alert->state == 0) {
         $reason = '';
     } else {
-        $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) :
-                  (!empty($msg) ? trim((string) $msg) : $ruleName);
+        $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) : '';
+        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName) {
+            $reason = trim((string) $msg);
+        }
+        if ($reason === '') { $reason = 'n/a'; }
     }
     $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
 

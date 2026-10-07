@@ -32,6 +32,9 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
+                - title: Reason
+                  value: "{{ alert.fired_reason }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -67,6 +70,9 @@ workflow:
                 - title: Issue
                   value: "{{ alert.rule }}"
                   short: false
+                - title: Reason
+                  value: "{{ alert.fired_reason }}"
+                  short: false
                 - title: IP
                   value: "{{ alert.ip }}"
                   short: true
@@ -91,6 +97,8 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_net_v2
               value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
@@ -128,6 +136,8 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_nms_v2
               value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
           attachments:
             - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
               color: "#ff3131"
