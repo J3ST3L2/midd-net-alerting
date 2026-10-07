@@ -1,0 +1,83 @@
+workflow:
+  id: middlebury-efficientip-slack
+  name: Middlebury EfficientIP Slack
+  description: Stateful EfficientIP SOLIDserver lifecycle delivery through NMS-Alert-Bot to efficientip-alerts.
+  disabled: false
+
+  triggers:
+    - type: alert
+      filters:
+        - key: source
+          value: efficientip
+
+  actions:
+    - name: slack-resolved-update-efficientip
+      if: "'{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp_efficientip_v1 }}"
+          channel: C0BG31RLY1H
+          enrich_alert:
+            - key: slack_timestamp_efficientip_v1
+              value: ""
+          attachments:
+            - fallback: "{{ alert.hostname }} RECOVERED • {{ alert.event }}"
+              color: "#39ff14"
+              author_name: "{{ alert.hostname }} RECOVERED"
+              fields:
+                - title: Event
+                  value: "{{ alert.event }}"
+                  short: false
+                - title: Details
+                  value: "{{ alert.message }}"
+                  short: false
+                - title: Object
+                  value: "{{ alert.object }}"
+                  short: true
+                - title: Appliance IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "EfficientIP SOLIDserver • Keep"
+
+    - name: slack-firing-efficientip
+      if: "not '{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0BG31RLY1H
+          enrich_alert:
+            - key: slack_timestamp_efficientip_v1
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "{{ alert.hostname }} ALERT • {{ alert.event }}"
+              color: "#ff3131"
+              author_name: "{{ alert.hostname }} ALERT"
+              fields:
+                - title: Event
+                  value: "{{ alert.event }}"
+                  short: false
+                - title: Details
+                  value: "{{ alert.message }}"
+                  short: false
+                - title: Object
+                  value: "{{ alert.object }}"
+                  short: true
+                - title: Appliance IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "EfficientIP SOLIDserver • Keep"
