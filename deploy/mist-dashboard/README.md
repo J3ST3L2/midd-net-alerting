@@ -122,12 +122,19 @@ excluded and counted in `mist_pn_auth_failure_clients_unresolved`; "unique clien
 become a metric label, a log line, or a file. There is no per-user or per-MAC series. After a restart the
 exporter has to reload them, which is the history-loading period below.
 
+**Two-week trend.** Every chart in the row shows the last 14 days (a panel-level range, so it holds even
+when the dashboard is set to 6 hours). Each point is the trailing 24-hour value at that moment. Prometheus
+keeps 180 days, so history simply accumulates from when the feature was switched on; it cannot be
+backfilled, because rebuilding two weeks of events would be 14 times the load and Mist does not retain
+client events that long. After an exporter restart the event-based counts are withheld until the 24 hours
+are reloaded, so the trend shows a short gap instead of a false dip.
+
 **Cost and loading time.** The exporter reads 24 hours of events in small slices and looks up each failing
 device's username and each failing user's MiddleburyCollege connections. While loading, it makes up to
 `FALLBACK_PAGES_PER_SLICE` + `FALLBACK_LOOKUPS_PER_SLICE` Mist calls a minute (default 16 + 24), on top of
 the exporter's usual roughly 20 a minute, against Mist's limit of about 5000 an hour. Loading takes
 **hours** after every restart because the lookups dominate; the **History** tile reads *Loading* until it is
-done and the numbers are partial until then. In steady state it needs roughly 15 calls a minute, and speeds
+done, and the failure and fallback counts stay blank until then. In steady state it needs roughly 15 calls a minute, and speeds
 up by itself whenever lookups are queued.
 
 | Setting (`.env`) | Default | Meaning |
