@@ -40,6 +40,11 @@ class TrapHandlerTest(unittest.TestCase):
         self.assertEqual(c["status"], "resolved")
         self.assertEqual(r["fingerprint"], c["fingerprint"])
 
+    def test_two_digit_alert_number(self):
+        raised = FIRING.replace("EIP-MIB::alertRaised", "SNMPv2-SMI::enterprises.99999.2.10.1")
+        r = h.build_event(*h.parse(raised))[0]
+        self.assertEqual((r["status"], r["event"]), ("firing", "DHCP: Ranges above 90% usage"))
+
     def test_empty_input_does_not_crash(self):
         ev = h.build_event(*h.parse(""))[0]
         self.assertEqual(ev["event"], "unknown-trap")

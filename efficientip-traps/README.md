@@ -78,6 +78,8 @@ port `162`, the community from raccoon, and these OIDs (we choose them; the hand
 | 6 | HA SSL Certificate validity | `1.3.6.1.4.1.99999.2.6.1` | `1.3.6.1.4.1.99999.2.6.2` |
 | 7 | DHCP CLUSTER failures | `1.3.6.1.4.1.99999.2.7.1` | `1.3.6.1.4.1.99999.2.7.2` |
 | 8 | DHCP: Scopes Above 90% | `1.3.6.1.4.1.99999.2.8.1` | `1.3.6.1.4.1.99999.2.8.2` |
+| 9 | DHCP Scope Utilization - Critical | `1.3.6.1.4.1.99999.2.9.1` | `1.3.6.1.4.1.99999.2.9.2` |
+| 10 | DHCP: Ranges above 90% usage | `1.3.6.1.4.1.99999.2.10.1` | `1.3.6.1.4.1.99999.2.10.2` |
 
 `.1` = raised (red card), `.2` = released (the same card turns green). `99999` is an internal placeholder
 enterprise number; it only needs to be consistent between SOLIDserver and `ALERTS` in the handler.

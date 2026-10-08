@@ -31,6 +31,8 @@ ALERTS = {
     "6": "HA SSL Certificate validity",
     "7": "DHCP CLUSTER failures",
     "8": "DHCP: Scopes Above 90%",
+    "9": "DHCP Scope Utilization - Critical",
+    "10": "DHCP: Ranges above 90% usage",
 }
 
 
