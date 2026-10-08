@@ -1,0 +1,6 @@
+# /etc/snmp/snmptrapd.conf  (raccoon)
+# Replace <COMMUNITY> with a new random string; keep it out of Git and chat.
+# SOLIDserver must send traps with the same community.
+authCommunity log,execute <COMMUNITY>
+disableAuthorization no
+traphandle default /usr/local/bin/eip_trap_handler.py
