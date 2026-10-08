@@ -197,6 +197,12 @@ class FakeClient:
         self.sle_calls.append(("aps", site_id, metric, duration))
         return [{"ap_mac": "5c5b35000001", "name": "ap-davis-1", "degraded": 50, "total": 100}]
 
+    def search_client_events(self, event_type, ssid, start, end, limit=1000):
+        return [], False
+
+    def search_clients(self, start, end, limit=1000, **filters):
+        return [], 0
+
     def search_alarms(self, start, end):
         return list(self.alarms)
 

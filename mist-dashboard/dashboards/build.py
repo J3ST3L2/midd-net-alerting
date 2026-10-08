@@ -213,6 +213,65 @@ BREAKDOWN_NOTE = ("Clients seen in the last 30 minutes, so totals run a little a
                   "(which counts clients associated right now).")
 
 
+PN_FAILURE_DEF = ("Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or "
+                  "'802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown "
+                  "separately and not counted.")
+PN_FALLBACK_DEF = ("A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege "
+                   "connection by the same username within 30 minutes. It is judged only after those 30 minutes "
+                   "have passed, so this lags by that long. 'device' also requires the same OS and model. "
+                   "Clients with no username are excluded.")
+
+
+def row(title, y):
+    return {"type": "row", "title": title, "collapsed": False, "panels": [],
+            "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}}
+
+
+def pn_adoption(y):
+    """PantherNet adoption: who is on it, who fails to authenticate, who falls back to MiddleburyCollege."""
+    top = y + 1
+    p = [
+        row("PantherNet adoption", y),
+        timeseries("Unique clients: PantherNet vs MiddleburyCollege (24 h)", 0, top, 12, 8,
+                   [target("mist_pn_unique_clients", "{{ssid}}")],
+                   "Unique client devices seen on each SSID in the last 24 hours. Devices, not people: a "
+                   "client using a different random MAC per SSID counts once on each."),
+        timeseries("PantherNet auth failures (24 h)", 12, top, 12, 8,
+                   [target("mist_pn_auth_failure_events", "Failure events"),
+                    target("mist_pn_auth_failure_clients", "Unique users", ref="B")],
+                   "Failure events (left) and the unique users behind them (right). One failing device "
+                   "retries about six times, so events overstate the problem. " + PN_FAILURE_DEF),
+        timeseries("Fallback to MiddleburyCollege: clients", 0, top + 8, 12, 8,
+                   [target("mist_pn_fallback_clients", "{{match}}")], PN_FALLBACK_DEF),
+        timeseries("Fallback to MiddleburyCollege: share of failing clients", 12, top + 8, 12, 8,
+                   [target("mist_pn_fallback_rate", "{{match}}")],
+                   "Fallback clients divided by failing clients old enough to judge. " + PN_FALLBACK_DEF,
+                   unit="percentunit", max_=1),
+        bargauge("Why PantherNet auth fails (24 h)", 0, top + 16, 12, 8,
+                 "sort_desc(mist_pn_failure_reason_events)", "{{reason}}",
+                 "All PantherNet auth-failure events by reason. Only dot1x_failed and handshake_timeout are "
+                 "counted as failures; the rest are shown for context. " + PN_FAILURE_DEF),
+        stat("Data age", 12, top + 16, 6, 'time() - mist_exporter_last_success_timestamp_seconds{source="fallback"}',
+             "Seconds since the fallback data last refreshed from Mist.", unit="s",
+             thresholds=steps((GREEN, None), (AMBER, 600), (RED, 1800)), color_mode="background"),
+        stat("History", 18, top + 16, 6, "mist_pn_backfill_complete",
+             "Loading until the last 24 hours and their username lookups are fetched (after a restart this takes "
+             "a while). Numbers above are partial until it reads Loaded.",
+             mappings=[{"type": "value", "options": {"1": {"text": "Loaded", "color": GREEN},
+                                                      "0": {"text": "Loading", "color": AMBER}}}],
+             thresholds=steps((AMBER, None), (GREEN, 1)), color_mode="background"),
+        stat("Lookups pending", 12, top + 20, 6, "sum(mist_pn_lookups_pending)",
+             "Devices and users still waiting for a Mist lookup. Drops to near zero once history is loaded."),
+        stat("Judged clients", 18, top + 20, 6, 'sum(mist_pn_fallback_eligible_clients{match="user"})',
+             "Failing users old enough to judge, whose MiddleburyCollege connections have been checked: the "
+             "denominator of the fallback share."),
+    ]
+    overrides = p[2]["fieldConfig"]["overrides"]
+    overrides.append({"matcher": {"id": "byName", "options": "Unique users"},
+                      "properties": [{"id": "custom.axisPlacement", "value": "right"}]})
+    return p
+
+
 def wireless():
     clients = 'mist_ap_clients%s' % SITE
     aps = 'mist_device_up{type="ap",site=~"$site"}'
@@ -247,6 +306,7 @@ def wireless():
               overrides=[{"matcher": {"id": "byName", "options": "Down for"},
                           "properties": [{"id": "unit", "value": "s"}]}]),
     ]
+    p += pn_adoption(max(x["gridPos"]["y"] + x["gridPos"]["h"] for x in p))
     link_series(p, "Busiest APs", DEVICE_FROM_SERIES)
     link_series(p, "Clients by site", SITE_FROM_SERIES)
     link_columns(p, "Offline access points", {"AP": device_from_column("AP"), "Site": site_from_column("Site")})

@@ -26,6 +26,12 @@ services:
       MIST_API_HOST: ${MIST_API_HOST:-api.mist.com}
       MIST_ORG_ID: ${MIST_ORG_ID:?set MIST_ORG_ID in .env}
       MIST_API_TOKEN_FILE: /run/secrets/mist_api_token
+      # PantherNet adoption (see README). Defaults live in the exporter; override in .env if needed.
+      FALLBACK_ENABLED: ${FALLBACK_ENABLED:-true}
+      FALLBACK_WINDOW_S: ${FALLBACK_WINDOW_S:-1800}
+      FALLBACK_PAGES_PER_SLICE: ${FALLBACK_PAGES_PER_SLICE:-16}
+      FALLBACK_LOOKUPS_PER_SLICE: ${FALLBACK_LOOKUPS_PER_SLICE:-24}
+      MC_EVENT_TYPE: ${MC_EVENT_TYPE:-CLIENT_AUTH_ASSOCIATION}
     secrets:
       - mist_api_token
     networks:
