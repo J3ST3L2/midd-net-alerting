@@ -23,9 +23,9 @@ workflow:
             - key: slack_timestamp_efficientip_v1
               value: ""
           attachments:
-            - fallback: "{{ alert.hostname }} RECOVERED • {{ alert.event }}"
+            - fallback: "{{ alert.fired_host }} RECOVERED • {{ alert.event }}"
               color: "#39ff14"
-              author_name: "{{ alert.hostname }} RECOVERED"
+              author_name: "{{ alert.fired_host }} RECOVERED"
               fields:
                 - title: Event
                   value: "{{ alert.event }}"
@@ -33,11 +33,14 @@ workflow:
                 - title: Details
                   value: "{{ alert.message }}"
                   short: false
+                - title: Was
+                  value: "{{ alert.fired_message }}"
+                  short: false
                 - title: Object
-                  value: "{{ alert.object }}"
+                  value: "{{ alert.fired_object }}"
                   short: true
                 - title: Relay / IP
-                  value: "{{ alert.ip }}"
+                  value: "{{ alert.fired_ip }}"
                   short: true
                 - title: Severity
                   value: "{{ alert.severity }}"
@@ -57,6 +60,14 @@ workflow:
           enrich_alert:
             - key: slack_timestamp_efficientip_v1
               value: results.slack_timestamp
+            - key: fired_host
+              value: "{{ alert.hostname }}"
+            - key: fired_object
+              value: "{{ alert.object }}"
+            - key: fired_ip
+              value: "{{ alert.ip }}"
+            - key: fired_message
+              value: "{{ alert.message }}"
           attachments:
             - fallback: "{{ alert.hostname }} ALERT • {{ alert.event }}"
               color: "#ff3131"
