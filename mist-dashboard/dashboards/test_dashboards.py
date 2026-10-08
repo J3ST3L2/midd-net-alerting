@@ -84,6 +84,16 @@ class Dashboards(unittest.TestCase):
                     found += 1
         self.assertGreater(found, 5)
 
+    def test_pantherNet_trends_cover_two_weeks(self):
+        panels = {p["title"]: p for p in build.build()["mist-wireless.json"]["panels"]}
+        trends = [p for t, p in panels.items() if "PantherNet" in t or "Fallback" in t]
+        charts = [p for p in trends if p["type"] == "timeseries"]
+        self.assertGreaterEqual(len(charts), 4)
+        for p in charts:
+            self.assertEqual(p.get("timeFrom"), "14d", p["title"])
+        # the rest of the dashboard keeps the dashboard's own time range
+        self.assertNotIn("timeFrom", panels["Clients over time"])
+
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
             boxes = [(p["gridPos"], p["title"]) for p in d["panels"]]

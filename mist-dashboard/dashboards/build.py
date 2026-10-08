@@ -222,6 +222,10 @@ PN_FALLBACK_DEF = ("A client falls back when a counted PantherNet failure is fol
                    "Clients with no username are excluded.")
 
 
+PN_TREND_NOTE = ("Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days "
+                 "(history builds from when the exporter first ran, and is held back while a restart reloads it).")
+
+
 def row(title, y):
     return {"type": "row", "title": title, "collapsed": False, "panels": [],
             "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}}
@@ -256,7 +260,8 @@ def pn_adoption(y):
              thresholds=steps((GREEN, None), (AMBER, 600), (RED, 1800)), color_mode="background"),
         stat("History", 18, top + 16, 6, "mist_pn_backfill_complete",
              "Loading until the last 24 hours and their username lookups are fetched (after a restart this takes "
-             "a while). Numbers above are partial until it reads Loaded.",
+             "a while). The failure and fallback counts are withheld until it reads Loaded, so a restart "
+             "never draws a false dip in the trend.",
              mappings=[{"type": "value", "options": {"1": {"text": "Loaded", "color": GREEN},
                                                       "0": {"text": "Loading", "color": AMBER}}}],
              thresholds=steps((AMBER, None), (GREEN, 1)), color_mode="background"),
@@ -266,6 +271,10 @@ def pn_adoption(y):
              "Failing users old enough to judge, whose MiddleburyCollege connections have been checked: the "
              "denominator of the fallback share."),
     ]
+    for panel_ in p:
+        if panel_["type"] == "timeseries":
+            panel_["timeFrom"] = "14d"          # a panel-level range, independent of the dashboard time picker
+            panel_["description"] = (panel_["description"] + " " + PN_TREND_NOTE).strip()
     overrides = p[2]["fieldConfig"]["overrides"]
     overrides.append({"matcher": {"id": "byName", "options": "Unique users"},
                       "properties": [{"id": "custom.axisPlacement", "value": "right"}]})

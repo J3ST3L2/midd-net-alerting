@@ -26,6 +26,12 @@ OVERLAP_S = 60                 # incremental passes re-read this far back, de-du
 REASONS = ("dot1x_failed", "handshake_timeout", "previous_auth_invalid", "client_left", "tx_failure", "other")
 COUNTED = frozenset({"dot1x_failed", "handshake_timeout"})
 MAX_NAMES = 4                  # Mist lists 1-4 usernames per client
+# Counts rebuilt from event history. After a restart they are partial until the history has loaded, so
+# they are withheld until then: a restart must not draw a false dip into a weeks-long trend.
+PARTIAL_WHILE_LOADING = frozenset({
+    "mist_pn_auth_failure_events", "mist_pn_auth_failure_clients", "mist_pn_auth_failure_clients_unresolved",
+    "mist_pn_fallback_eligible_clients", "mist_pn_fallback_clients", "mist_pn_fallback_rate",
+    "mist_pn_failure_reason_events"})
 
 
 def _int(v):
@@ -256,7 +262,7 @@ class Tracker:
             return Family(name, help_, "gauge", samples)
 
         rate = [({"match": m}, e_f[1] / e_f[0]) for m, e_f in sorted(res.items()) if e_f[0]]
-        return [
+        fams = [
             fam("mist_pn_unique_clients", "Unique client devices seen in the last 24 h, per SSID (per-SSID MACs).",
                 [({"ssid": s}, v) for s, v in sorted(totals.items())]),
             fam("mist_pn_auth_failure_events", "Counted PantherNet failure events in the last 24 h "
@@ -282,6 +288,9 @@ class Tracker:
             fam("mist_pn_backfill_complete", "1 once the 24 h history and its lookups are loaded.",
                 [({}, float(complete))] if now else []),
         ]
+        if not complete:
+            fams = [Family(f.name, f.help, f.type, []) if f.name in PARTIAL_WHILE_LOADING else f for f in fams]
+        return fams
 
     def families(self):
         with self._lock:

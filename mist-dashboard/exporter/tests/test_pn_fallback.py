@@ -10,8 +10,8 @@ from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
 from mist_exporter.metrics import render  # noqa: E402
 from mist_exporter.mist_api import MistError  # noqa: E402
-from mist_exporter.pn_fallback import (FAIL_EVENT, Stream, Tracker, classify, normalize_username,  # noqa: E402
-                                       run_slice)
+from mist_exporter.pn_fallback import (FAIL_EVENT, PARTIAL_WHILE_LOADING, Stream, Tracker,  # noqa: E402
+                                       classify, normalize_username, run_slice)
 
 NOW = 1_800_000_000
 WINDOW = 1800
@@ -213,6 +213,21 @@ class EndToEnd(unittest.TestCase):
         fams = self.t.families()
         self.assertEqual(metric(fams, "mist_pn_fallback_eligible_clients", match="user"), 4.0)
         self.assertEqual(metric(fams, "mist_pn_fallback_clients", match="user"), 3.0)
+
+    def test_partial_counts_are_withheld_until_history_is_loaded(self):
+        t = Tracker(WINDOW, 86400, PN, MC)
+        run_slice(t, Clients(*scenario()), self.config, NOW)           # one slice: history not loaded yet
+        self.assertFalse(t.complete)
+        fams = t.families()
+        for f in fams:
+            if f.name in PARTIAL_WHILE_LOADING:
+                self.assertEqual(f.samples, [], f.name)                 # no false dip in a long trend
+        self.assertEqual(metric(fams, "mist_pn_backfill_complete"), 0.0)       # status stays visible
+        self.assertIsNotNone(metric(fams, "mist_pn_lookups_pending", stage="username"))
+        self.assertEqual(metric(fams, "mist_pn_unique_clients", ssid=PN), 4.0)  # API-backed total is exact
+        # and once loaded they are all back
+        run_until_complete(t, Clients(*scenario()), self.config)
+        self.assertEqual(metric(t.families(), "mist_pn_auth_failure_events"), 6.0)
 
     def test_totals_and_status(self):
         self.assertEqual(metric(self.fams, "mist_pn_unique_clients", ssid=PN), 4.0)
