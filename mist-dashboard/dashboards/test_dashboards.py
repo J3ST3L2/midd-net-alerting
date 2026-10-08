@@ -43,7 +43,7 @@ class Dashboards(unittest.TestCase):
     def test_every_queried_metric_is_exported(self):
         known = exported_metric_names()
         for name, d in build.build().items():
-            exprs = [t["expr"] for p in d["panels"] for t in p["targets"]]
+            exprs = [t["expr"] for p in d["panels"] for t in p.get("targets", [])]
             exprs += [v["query"]["query"] for v in d["templating"]["list"]]
             for e in exprs:
                 for metric in re.findall(r"\bmist_[a-z_]+\b", e):
@@ -67,6 +67,8 @@ class Dashboards(unittest.TestCase):
         found = 0
         for name, d in dashboards.items():
             for p in d["panels"]:
+                if p["type"] == "row":
+                    continue
                 fc = p["fieldConfig"]
                 links = list(fc["defaults"].get("links", []))
                 for o in fc["overrides"]:

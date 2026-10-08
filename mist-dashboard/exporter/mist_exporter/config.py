@@ -31,6 +31,17 @@ class Config:
     sle_interval: int = 300           # wifi SLE scores (coverage, capacity, ...)
     sle_window: str = "1d"            # SLE look-back, Mist's own default
     sites_interval: int = 900         # site id -> name map
+    # PantherNet -> MiddleburyCollege fallback (see pn_fallback.py)
+    fallback_enabled: bool = True
+    fallback_interval: int = 300      # once the history is loaded; every 60 s while it loads
+    fallback_window_s: int = 1800     # a failure counts as a fallback if MC follows within this
+    fallback_lookback_h: int = 24
+    fallback_pages_per_slice: int = 16      # event pages per slice, split between the two feeds
+    fallback_lookups_per_slice: int = 24    # username / connection lookups per slice
+    fallback_totals_interval: int = 300     # unique-client totals per SSID
+    pn_ssid: str = "PantherNet"
+    mc_ssid: str = "MiddleburyCollege"
+    mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
     alarm_window_hours: int = 24
     page_limit: int = 100
     max_pages: int = 20
@@ -52,6 +63,16 @@ def load():
         sle_interval=int(env("SLE_INTERVAL_S", "300")),
         sle_window=env("SLE_WINDOW", "1d").strip(),
         sites_interval=int(env("SITES_INTERVAL_S", "900")),
+        fallback_enabled=env("FALLBACK_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on"),
+        fallback_interval=int(env("FALLBACK_INTERVAL_S", "300")),
+        fallback_window_s=int(env("FALLBACK_WINDOW_S", "1800")),
+        fallback_lookback_h=int(env("FALLBACK_LOOKBACK_H", "24")),
+        fallback_pages_per_slice=int(env("FALLBACK_PAGES_PER_SLICE", "16")),
+        fallback_lookups_per_slice=int(env("FALLBACK_LOOKUPS_PER_SLICE", "24")),
+        fallback_totals_interval=int(env("FALLBACK_TOTALS_INTERVAL_S", "300")),
+        pn_ssid=env("PN_SSID", "PantherNet").strip(),
+        mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
+        mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),
         alarm_window_hours=int(env("ALARM_WINDOW_HOURS", "24")),
         page_limit=int(env("PAGE_LIMIT", "100")),
         max_pages=int(env("MAX_PAGES", "20")),

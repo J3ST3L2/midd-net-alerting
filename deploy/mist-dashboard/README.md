@@ -95,6 +95,55 @@ Per-AP detail covers coverage and capacity only, and only the worst 25 APs per s
 exported, which keeps series counts bounded. A metric a site does not support is skipped with a warning
 in the exporter log.
 
+## PantherNet adoption (Mist Wireless, bottom row)
+
+Shows how many clients are on **PantherNet**, how many fail to authenticate on it, and how many of those
+then **fall back to MiddleburyCollege**. The panels: unique clients per SSID, failure events and unique
+failing users, fallback clients and share, why authentication fails, and a small status block (data age,
+history loaded, lookups pending, users judged).
+
+**What counts as a failure.** A PantherNet `MARVIS_EVENT_CLIENT_AUTH_FAILURE` with reason 23 (or
+"802.1x Auth Fail" in the text) or reason 15 (4-way handshake timeout). Reasons 2, 3 and 8, and status 79
+("transmission failure"), are shown in the reasons chart but are **not** counted: they are noise or normal
+client behaviour. A failing device retries about six times, so the panel shows unique users beside events.
+
+**What counts as a fallback.** A counted failure followed by a MiddleburyCollege association by the **same
+username** within `FALLBACK_WINDOW_S` (default 1800 s). A failure is judged only after that window has
+passed, so the fallback numbers **lag by 30 minutes**. `match="device"` also requires the same OS and model,
+which filters out a user whose *phone* is on MiddleburyCollege while their *laptop* failed PantherNet.
+
+**Why username and not MAC.** Most clients use a different random MAC on each SSID (about 86% of
+MiddleburyCollege clients and 24% of PantherNet clients), so matching MACs finds about 8% of fallbacks.
+Matching by username finds about 78%. Caveats: a user with several devices can look like a fallback when
+only one device failed (the `device` match is the stricter view); clients with no username on record are
+excluded and counted in `mist_pn_auth_failure_clients_unresolved`; "unique clients" are devices, not people.
+
+**Privacy.** Usernames are read from Mist, held in the exporter's memory to do the matching, and never
+become a metric label, a log line, or a file. There is no per-user or per-MAC series. After a restart the
+exporter has to reload them, which is the history-loading period below.
+
+**Cost and loading time.** The exporter reads 24 hours of events in small slices and looks up each failing
+device's username and each failing user's MiddleburyCollege connections. While loading, it makes up to
+`FALLBACK_PAGES_PER_SLICE` + `FALLBACK_LOOKUPS_PER_SLICE` Mist calls a minute (default 16 + 24), on top of
+the exporter's usual roughly 20 a minute, against Mist's limit of about 5000 an hour. Loading takes
+**hours** after every restart because the lookups dominate; the **History** tile reads *Loading* until it is
+done and the numbers are partial until then. In steady state it needs roughly 15 calls a minute, and speeds
+up by itself whenever lookups are queued.
+
+| Setting (`.env`) | Default | Meaning |
+|---|---|---|
+| `FALLBACK_ENABLED` | `true` | `false` switches the whole feature off |
+| `FALLBACK_WINDOW_S` | `1800` | seconds after a failure in which MiddleburyCollege counts as fallback |
+| `FALLBACK_PAGES_PER_SLICE` | `16` | event pages per minute while loading (split over the two feeds) |
+| `FALLBACK_LOOKUPS_PER_SLICE` | `24` | username / connection lookups per minute while loading |
+| `MC_EVENT_TYPE` | `CLIENT_AUTH_ASSOCIATION` | MiddleburyCollege event that means "connected" |
+
+Metrics: `mist_pn_unique_clients{ssid}`, `mist_pn_auth_failure_events`, `mist_pn_auth_failure_clients`,
+`mist_pn_auth_failure_clients_unresolved`, `mist_pn_fallback_eligible_clients{match}`,
+`mist_pn_fallback_clients{match}`, `mist_pn_fallback_rate{match}`, `mist_pn_failure_reason_events{reason}`,
+`mist_pn_lookups_pending{stage}`, `mist_pn_fallback_window_seconds`, `mist_pn_backfill_complete`.
+`mist_exporter_*` metrics include `source="fallback"`.
+
 ## Known limits
 
 - **Open alarms** counts alarm records in the last 24 h whose `resolved_time`/`status` is unset.

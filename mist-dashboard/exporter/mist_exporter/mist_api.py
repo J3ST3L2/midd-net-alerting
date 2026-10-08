@@ -104,6 +104,27 @@ class MistClient:
             raise MistError("unexpected impacted-aps response shape")
         return [a for a in body["aps"] if isinstance(a, dict)]
 
+    def search_client_events(self, event_type, ssid, start, end, limit=1000):
+        """One page (newest first) of wireless client events of one type on one SSID in [start, end].
+        Returns (rows, more). Callers page by moving `end` back, so no `next` URL is stored or followed."""
+        body = self._get(self._url("/orgs/%s/clients/events/search" % self.org_id,
+                                   {"type": event_type, "ssid": ssid, "start": int(start), "end": int(end),
+                                    "limit": limit}))
+        if not isinstance(body, dict) or not isinstance(body.get("results"), list):
+            raise MistError("unexpected client events response shape")
+        rows = [r for r in body["results"] if isinstance(r, dict)]
+        return rows, (bool(body.get("next")) if "next" in body else len(body["results"]) >= limit)
+
+    def search_clients(self, start, end, limit=1000, **filters):
+        """Wireless clients seen in [start, end], filtered by ssid / mac / username. One page.
+        Returns (rows, total). Rows carry usernames and device details: callers keep them in memory only."""
+        params = {"start": int(start), "end": int(end), "limit": limit}
+        params.update({k: v for k, v in filters.items() if v})
+        body = self._get(self._url("/orgs/%s/clients/search" % self.org_id, params))
+        if not isinstance(body, dict) or not isinstance(body.get("results"), list):
+            raise MistError("unexpected client search response shape")
+        return [r for r in body["results"] if isinstance(r, dict)], body.get("total")
+
     def search_alarms(self, start, end):
         """All alarms in [start, end]. Raises if any page fails or pages are cut off."""
         url = self._url("/orgs/%s/alarms/search" % self.org_id,
