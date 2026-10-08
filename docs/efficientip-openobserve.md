@@ -27,13 +27,13 @@ created **twice**. Both must produce the same Keep fingerprint, `efficientip:ope
 | OpenObserve alert | Condition | Template | Effect in Keep |
 |---|---|---|---|
 | `<name>` | matches >= 1 | `keep-efficientip-firing` (shared by all alerts) | red card |
-| `<name> (cleared)` | matches < 1 | `keep-efficientip-cleared-<name>` (one per alert) | same card turns green |
+| `<name>_cleared` | matches < 1 | `keep-efficientip-cleared-<name>` (one per alert) | same card turns green |
 
 Why the cleared template is per alert: the cleared alert has a different name (OpenObserve will not
 allow two alerts with one name) and, with zero matching rows, it cannot read any row column such as
 `{host}`. So its template hard-codes the base name. Copy `openobserve/efficientip-cleared.template.json`
 once per alert and replace both `<ALERT NAME>` placeholders with the exact firing-alert name, for
-example `DHCP Lease Exhaustion`. The firing template is shared because it builds the fingerprint from
+example `DHCP_Lease_Exhaustion`. The firing template is shared because it builds the fingerprint from
 `{alert_name}`, which is the firing alert's own name.
 
 ## 1. Webhook destination (one-time)
@@ -80,10 +80,16 @@ which fires per scope. The card shows the most recent matching line.
 
 1. Check the Keep side first: `bash keep/tests/test-efficientip-lifecycle.sh` on Gravitron.
 2. In OpenObserve, use the alert's **test/preview** to confirm the SQL returns the expected row.
-3. Send a synthetic DHCP line from a host allowed to log to raccoon, for example from raccoon:
-   `logger -n 127.0.0.1 -P 514 -d -t 'dhcpd[99999]:' 'DHCPDISCOVER from 02:00:00:00:00:01 via hn1: network test-netv4: no free leases'`
+3. Send a synthetic DHCP line that claims to come from hera (a plain `logger` would log as raccoon and not match the host filter). On raccoon:
+   `python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.sendto(b'<30>Oct  7 17:05:00 hera.middlebury.edu dhcpd[99999]: TEST ONLY DHCPDISCOVER from 02:00:00:00:00:01 via 10.255.255.1: network test-netv4: no free leases',('127.0.0.1',514))"`
 4. Expect: a red `EfficientIP: DHCP Lease Exhaustion` card within a minute or two, and a green one
    after the period passes with no new matches.
+
+## Verified behaviour (2026-10-07)
+
+- Test line above produced a red card with the real host, relay, client MAC and log line (bare `{host}`/`{message}`/`{relay}`/`{mac}` are filled from the first returned row).
+- Alert names cannot contain spaces. Condition `< 1` fires on zero rows.
+- Real exhaustion lines look like `DHCPDISCOVER from <mac> via <relay>: cancel load balance to peer ... - no free leases` and carry **no network name**, only the relay/gateway IP, so the card shows the relay. About 600k DHCP lines a day arrive with `appname=kernel` (real text in the message) and are not matched by the `appname = 'dhcpd'` filter; none contained `no free leases` outside the default-netv4 noise.
 
 ## Known gaps
 
@@ -91,5 +97,4 @@ which fires per scope. The card shows the most recent matching line.
   validity, clock drift, scopes above 90%) are not in the logs reliably. They can only leave the
   appliance by REST, SNMP trap or email. The REST login is currently refused (see
   `efficientip-poller/discovery/`); parked until someone confirms how `slack_api` authenticates.
-- The OpenObserve template variable names and the "less than" threshold for the cleared alert are
-  unverified against your version.
+- The green (cleared) card path is configured but its end-to-end behaviour is still being confirmed.

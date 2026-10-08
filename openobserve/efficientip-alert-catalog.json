@@ -1,14 +1,14 @@
 {
-  "_comment": "Alert definitions to create in OpenObserve (Alerts -> Add alert). Stream: network_syslog (the only stream; ~1.6B events). Fields seen on EfficientIP rows: host, hostname, device, appname (dhcpd, named, ipmserver, ...), facility, collector, message. DHCP and DNS run on hera.middlebury.edu and lion.middlebury.edu (lion is believed to be zeus; juno and jupiter are the management appliances). Each alert is created twice: a firing alert (this query, shared template 'keep-efficientip-firing') and a cleared alert named '<alert_name> (cleared)' (same query, threshold 'less than 1', using its own cleared template whose fingerprint hard-codes '<alert_name>'). See docs/efficientip-openobserve.md. Query results below were measured against real data on 2026-10-07.",
+  "_comment": "Alert definitions in OpenObserve (Alerts -> New alert). Alert names must not contain spaces or special characters, so use underscores. Stream: network_syslog. DHCP and DNS run on hera.middlebury.edu and lion.middlebury.edu (lion is zeus: its lines carry zeus-eip in the message). juno and jupiter are the management appliances. Each alert is created twice: a firing alert (this query, template 'keep-efficientip-firing') and '<alert_name>_cleared' (same query, condition '< 1', its own cleared template whose fingerprint hard-codes '<alert_name>'; verified: '< 1' fires on zero rows). See docs/efficientip-openobserve.md. Measured against real data on 2026-10-07.",
   "hosts": [
     "hera.middlebury.edu",
     "lion.middlebury.edu"
   ],
   "alerts": [
     {
-      "alert_name": "DHCP Lease Exhaustion",
+      "alert_name": "DHCP_Lease_Exhaustion",
       "enable": true,
-      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('no free leases') AND message NOT LIKE '%default-netv4%' AND message NOT LIKE '%efault-netv4%' ORDER BY _timestamp DESC LIMIT 1",
+      "sql": "SELECT host, regexp_replace(message, '.* via ([^: ]+).*', '\\1') AS relay, regexp_replace(message, '.*from ([0-9a-fA-F:]{17}).*', '\\1') AS mac, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('no free leases') AND message NOT LIKE '%default-netv4%' AND message NOT LIKE '%efault-netv4%' ORDER BY _timestamp DESC LIMIT 1",
       "period_minutes": 10,
       "frequency_minutes": 1,
       "threshold": ">= 1",
@@ -16,27 +16,27 @@
       "note": "dhcpd logs the network name, so this is already per shared network. The card shows the most recent matching line."
     },
     {
-      "alert_name": "DHCP Service Failed or Stopped",
+      "alert_name": "DHCP_Service_Failed_or_Stopped",
       "enable": false,
-      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND (match_all('exiting') OR match_all('failed') OR match_all('not running')) ORDER BY _timestamp DESC LIMIT 1",
+      "sql": "SELECT host, regexp_replace(message, '.* via ([^: ]+).*', '\\1') AS relay, regexp_replace(message, '.*from ([0-9a-fA-F:]{17}).*', '\\1') AS mac, message FROM \"network_syslog\" WHERE appname = 'dhcpd' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND (match_all('exiting') OR match_all('failed') OR match_all('not running')) ORDER BY _timestamp DESC LIMIT 1",
       "period_minutes": 5,
       "frequency_minutes": 1,
       "threshold": ">= 1",
       "measured": "1 match in 30 days. Quiet enough, but read that one line first to confirm it is a real fault pattern before enabling."
     },
     {
-      "alert_name": "DNS Service Failed or Stopped",
+      "alert_name": "DNS_Service_Failed_or_Stopped",
       "enable": false,
-      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('failed') AND match_all('exiting') ORDER BY _timestamp DESC LIMIT 1",
+      "sql": "SELECT host, regexp_replace(message, '.* via ([^: ]+).*', '\\1') AS relay, regexp_replace(message, '.*from ([0-9a-fA-F:]{17}).*', '\\1') AS mac, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('failed') AND match_all('exiting') ORDER BY _timestamp DESC LIMIT 1",
       "period_minutes": 5,
       "frequency_minutes": 1,
       "threshold": ">= 1",
       "measured": "0 matches in 30 days. named does log from both hosts (about 2.4M and 1.3M lines/day), so silence may just mean nothing broke, but the wording is unverified. Find a real named failure line before relying on this."
     },
     {
-      "alert_name": "DNS Zone Load Failure",
+      "alert_name": "DNS_Zone_Load_Failure",
       "enable": false,
-      "sql": "SELECT host, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('zone') AND (match_all('not loaded') OR match_all('has errors') OR match_all('loading failed')) ORDER BY _timestamp DESC LIMIT 1",
+      "sql": "SELECT host, regexp_replace(message, '.* via ([^: ]+).*', '\\1') AS relay, regexp_replace(message, '.*from ([0-9a-fA-F:]{17}).*', '\\1') AS mac, message FROM \"network_syslog\" WHERE appname = 'named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND match_all('zone') AND (match_all('not loaded') OR match_all('has errors') OR match_all('loading failed')) ORDER BY _timestamp DESC LIMIT 1",
       "period_minutes": 10,
       "frequency_minutes": 1,
       "threshold": ">= 1",

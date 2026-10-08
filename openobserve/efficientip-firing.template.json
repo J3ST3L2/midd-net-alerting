@@ -6,10 +6,10 @@
     "source": ["efficientip"],
     "fingerprint": "efficientip:openobserve:{alert_name}",
     "hostname": "{host}",
+    "ip": "{relay}",
     "event": "{alert_name}",
-    "object": "{stream_name}",
-    "message": "{message}",
-    "matches": "{alert_count} match(es) in the last {alert_period} minute(s)",
+    "object": "Client {mac}",
+    "message": "A client was refused an address (no free leases). Relay/gateway {relay}. Log: {message:250}",
     "alert_url": "{alert_url}"
   }
 ]
