@@ -19,6 +19,20 @@ RAW_LOG = "/var/log/eip-traps.log"
 TRAP_OID_KEYS = ("snmpTrapOID.0", "1.3.6.1.6.3.1.1.4.1.0")
 CLEARED_WORDS = ("released", "cleared", "normal", "recovered", "closed")
 
+# We choose the OIDs entered in each SOLIDserver alert definition:
+#   <BASE>.<alert number>.1 = raised, <BASE>.<alert number>.2 = released
+OID_RE = re.compile(r"99999\.2\.(\d+)\.([12])")
+ALERTS = {
+    "1": "Member clock drift",
+    "2": "LICENSES: subscription expiration",
+    "3": "LICENSES: license expiration",
+    "4": "LICENSES: maintenance expiration",
+    "5": "LICENSES: metrics usage",
+    "6": "HA SSL Certificate validity",
+    "7": "DHCP CLUSTER failures",
+    "8": "DHCP: Scopes Above 90%",
+}
+
 
 def parse(text):
     lines = [l.rstrip("\n") for l in text.splitlines() if l.strip()]
@@ -38,6 +52,23 @@ def parse(text):
 
 
 def build_event(host, ip, trap, varbinds):
+    m = OID_RE.search(trap)
+    if m:
+        name = ALERTS.get(m.group(1), "SOLIDserver alert %s" % m.group(1))
+        cleared = m.group(2) == "2"
+        detail = "; ".join(varbinds)[:250]
+        return [{
+            "name": "EfficientIP: %s" % name,
+            "status": "resolved" if cleared else "firing",
+            "severity": "info" if cleared else "warning",
+            "source": ["efficientip"],
+            "fingerprint": "efficientip:trap:%s:%s" % (ip, m.group(1)),
+            "hostname": host,
+            "ip": ip,
+            "event": name,
+            "object": "SOLIDserver",
+            "message": ("%s %s. %s" % (name, "released" if cleared else "raised", detail)).strip(),
+        }]
     message = "; ".join(varbinds)[:300] or "(no details in trap)"
     cleared = any(w in (trap + " " + message).lower() for w in CLEARED_WORDS)
     # Key the card on the first varbind's value (the alert name) so a raise and
