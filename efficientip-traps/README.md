@@ -62,3 +62,22 @@ text to see it turn green.
 ```bash
 python -m unittest -v test_eip_trap_handler
 ```
+
+## OIDs to enter in each SOLIDserver alert definition
+
+In the alert's edit form, tick **SNMP trap** and fill: version `v2c`, destination `140.233.37.50`,
+port `162`, the community from raccoon, and these OIDs (we choose them; the handler decodes them):
+
+| # | Alert | Raised OID | Released OID |
+|---|---|---|---|
+| 1 | Member clock drift | `1.3.6.1.4.1.99999.2.1.1` | `1.3.6.1.4.1.99999.2.1.2` |
+| 2 | LICENSES: subscription expiration | `1.3.6.1.4.1.99999.2.2.1` | `1.3.6.1.4.1.99999.2.2.2` |
+| 3 | LICENSES: license expiration | `1.3.6.1.4.1.99999.2.3.1` | `1.3.6.1.4.1.99999.2.3.2` |
+| 4 | LICENSES: maintenance expiration | `1.3.6.1.4.1.99999.2.4.1` | `1.3.6.1.4.1.99999.2.4.2` |
+| 5 | LICENSES: metrics usage | `1.3.6.1.4.1.99999.2.5.1` | `1.3.6.1.4.1.99999.2.5.2` |
+| 6 | HA SSL Certificate validity | `1.3.6.1.4.1.99999.2.6.1` | `1.3.6.1.4.1.99999.2.6.2` |
+| 7 | DHCP CLUSTER failures | `1.3.6.1.4.1.99999.2.7.1` | `1.3.6.1.4.1.99999.2.7.2` |
+| 8 | DHCP: Scopes Above 90% | `1.3.6.1.4.1.99999.2.8.1` | `1.3.6.1.4.1.99999.2.8.2` |
+
+`.1` = raised (red card), `.2` = released (the same card turns green). `99999` is an internal placeholder
+enterprise number; it only needs to be consistent between SOLIDserver and `ALERTS` in the handler.

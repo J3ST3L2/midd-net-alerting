@@ -31,6 +31,15 @@ class TrapHandlerTest(unittest.TestCase):
         raised = h.build_event(*h.parse(FIRING))[0]
         self.assertEqual(ev["fingerprint"], raised["fingerprint"])
 
+    def test_known_oids_map_to_alert_and_state(self):
+        raised = FIRING.replace("EIP-MIB::alertRaised", "SNMPv2-SMI::enterprises.99999.2.1.1")
+        released = FIRING.replace("EIP-MIB::alertRaised", "SNMPv2-SMI::enterprises.99999.2.1.2")
+        r = h.build_event(*h.parse(raised))[0]
+        c = h.build_event(*h.parse(released))[0]
+        self.assertEqual((r["status"], r["event"]), ("firing", "Member clock drift"))
+        self.assertEqual(c["status"], "resolved")
+        self.assertEqual(r["fingerprint"], c["fingerprint"])
+
     def test_empty_input_does_not_crash(self):
         ev = h.build_event(*h.parse(""))[0]
         self.assertEqual(ev["event"], "unknown-trap")
