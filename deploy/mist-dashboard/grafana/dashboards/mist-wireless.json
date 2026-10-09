@@ -1657,6 +1657,126 @@
       ],
       "title": "Lookups pending over time",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "id": 26,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(mist_ssid_os_clients{ssid=\"PantherNet\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "{{os}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operating systems on PantherNet",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify. The old network: which kinds of device have not moved yet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "id": 27,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(mist_ssid_os_clients{ssid=\"MiddleburyCollege\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "{{os}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operating systems on MiddleburyCollege",
+      "type": "bargauge"
     }
   ],
   "refresh": "1m",

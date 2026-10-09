@@ -317,6 +317,13 @@ def pn_adoption(y):
                         "Only interesting while History says Loading. 'username' is failing devices whose user is "
                         "not yet known, 'connections' is users whose MiddleburyCollege connections are not yet "
                         "checked. A falling line means the history is loading; a flat line means it is stalled."))
+    os_note = ("Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded "
+               "into one short list; 'Unknown' is a device Mist could not identify.")
+    p += [bargauge("Operating systems on PantherNet", 0, top + 30, 12, 9,
+                   'sort_desc(mist_ssid_os_clients{ssid="PantherNet"})', "{{os}}", os_note),
+          bargauge("Operating systems on MiddleburyCollege", 12, top + 30, 12, 9,
+                   'sort_desc(mist_ssid_os_clients{ssid="MiddleburyCollege"})', "{{os}}",
+                   os_note + " The old network: which kinds of device have not moved yet.")]
     return p
 
 
@@ -664,10 +671,85 @@ def aruba_view():
                      time_from="now-7d", tags=("mist", "aruba"))
 
 
+def _z(expr):
+    """Treat a side with no data yet as zero, so a combined number never disappears with it."""
+    return "(%s or vector(0))" % expr
+
+
+MIST_PN = 'sum(mist_site_clients_by_ssid{ssid="PantherNet"})'
+MIST_MC = 'sum(mist_site_clients_by_ssid{ssid="MiddleburyCollege"})'
+CAMPUS_PN = "(%s + %s)" % (_z(MIST_PN), _z(ARUBA_PN))
+CAMPUS_MC = "(%s + %s)" % (_z(MIST_MC), _z(ARUBA_MC))
+CAMPUS_NOTE = ("Mist and Aruba added together: the devices connected right now, counted on both platforms "
+               "(Mist counts a device if it was seen in the last 30 minutes; Aruba is the controllers' live tables).")
+OS_METRICS = '__name__=~"aruba_ssid_os_clients|mist_ssid_os_clients"'
+
+
+def pn_campus_view():
+    pn_os = 'sum by (os) ({%s, ssid="PantherNet"})' % OS_METRICS
+    all_os = 'sum by (os) ({%s, ssid=~"PantherNet|MiddleburyCollege"})' % OS_METRICS
+    p = [
+        stat("Devices on PantherNet", 0, 0, 5, CAMPUS_PN, "Campus-wide. " + CAMPUS_NOTE),
+        stat("Devices on MiddleburyCollege", 5, 0, 5, CAMPUS_MC,
+             "Campus-wide, the old network. " + CAMPUS_NOTE),
+        stat("PantherNet share", 10, 0, 5, "100 * %s / (%s + %s)" % (CAMPUS_PN, CAMPUS_PN, CAMPUS_MC),
+             "Of the devices on PantherNet or MiddleburyCollege, the percentage on PantherNet, Mist and Aruba "
+             "together. This is the adoption number.", unit="percent"),
+        stat("Mist side", 15, 0, 4, "100 * %s / (%s + %s)" % (MIST_PN, MIST_PN, MIST_MC),
+             "The same percentage for the Mist-managed buildings only.", unit="percent"),
+        stat("Aruba side", 19, 0, 5, "100 * %s / (%s + %s)" % (ARUBA_PN, ARUBA_PN, ARUBA_MC),
+             "The same percentage for the Aruba-managed buildings only.", unit="percent"),
+
+        timeseries("PantherNet share over time", 0, 4, 12, 9,
+                   [target("100 * %s / (%s + %s)" % (CAMPUS_PN, CAMPUS_PN, CAMPUS_MC), "Campus"),
+                    target("100 * %s / (%s + %s)" % (MIST_PN, MIST_PN, MIST_MC), "Mist side", ref="B"),
+                    target("100 * %s / (%s + %s)" % (ARUBA_PN, ARUBA_PN, ARUBA_MC), "Aruba side", ref="C")],
+                   "How the adoption percentage moves, for the campus and for each platform. A line going up "
+                   "means more devices are choosing PantherNet. It is a snapshot of who is connected, so it "
+                   "follows the school day and the academic calendar.", unit="percent", min_=None),
+        timeseries("Devices over time", 12, 4, 12, 9,
+                   [target(MIST_PN, "PantherNet - Mist"), target(ARUBA_PN, "PantherNet - Aruba", ref="B"),
+                    target(MIST_MC, "MiddleburyCollege - Mist", ref="C"),
+                    target(ARUBA_MC, "MiddleburyCollege - Aruba", ref="D")],
+                   "Devices connected to each network, on each platform. " + CAMPUS_NOTE),
+
+        bargauge("Operating systems on PantherNet", 0, 13, 12, 9, "sort_desc(%s)" % pn_os, "{{os}}",
+                 "Campus-wide, Mist and Aruba together. Operating systems are folded into one short list; "
+                 "'Unknown' is a device the network could not identify."),
+        bargauge("Operating systems on MiddleburyCollege", 12, 13, 12, 9,
+                 'sort_desc(sum by (os) ({%s, ssid="MiddleburyCollege"}))' % OS_METRICS, "{{os}}",
+                 "The same view for the old network: which kinds of device have not moved yet."),
+
+        bargauge("PantherNet share by operating system", 0, 22, 24, 9,
+                 "sort_desc(100 * %s / %s)" % (pn_os, all_os), "{{os}}",
+                 "For each operating system, the percentage of its devices that are on PantherNet rather than "
+                 "MiddleburyCollege. A short bar is where adoption is lagging.", unit="percent", max_=100),
+
+        row("Sign-in problems and overlap", 31),
+        stat("Users who failed to sign in", 0, 32, 6, "mist_pn_auth_failure_clients",
+             "Mist buildings only, last 24 hours: unique users with at least one failed PantherNet sign-in. "
+             "Aruba does not report failures. " + PN_FAILURE_DEF, thresholds=steps((GREEN, None), (AMBER, 1))),
+        stat("...who then used MiddleburyCollege", 6, 32, 6, 'mist_pn_fallback_rate{match="user"}',
+             "Mist buildings only: of the failing users old enough to judge, the percentage who connected to "
+             "MiddleburyCollege within 30 minutes. " + PN_FALLBACK_DEF, unit="percentunit",
+             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5))),
+        stat("People on both networks", 12, 32, 6, "aruba_people_on_both_ssids",
+             "Aruba buildings only: people (by username) with a device on PantherNet and another on "
+             "MiddleburyCollege right now."),
+        stat("Data age", 18, 32, 6,
+             'max(time() - mist_exporter_last_success_timestamp_seconds{source=~"clients|aruba"})',
+             "Seconds since the older of the Mist and Aruba counts last refreshed.", unit="s",
+             thresholds=steps((GREEN, None), (AMBER, 300), (RED, 900)), color_mode="background"),
+    ]
+    return dashboard("pn-adoption", "PantherNet Adoption", p, [],
+                     "Campus-wide PantherNet adoption: Mist and Aruba together.",
+                     time_from="now-7d", tags=("mist", "aruba"))
+
+
 def build():
     return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
             "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view(),
-            "aruba-wireless.json": aruba_view()}
+            "aruba-wireless.json": aruba_view(), "pn-adoption.json": pn_campus_view()}
 
 
 def render(d):

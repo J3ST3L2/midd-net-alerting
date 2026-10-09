@@ -9,8 +9,8 @@ import threading
 import time
 
 from . import aruba, pn_fallback
-from .metrics import (Family, alarm_families, aruba_families, device_families, render, site_ap_families,
-                      sle_families, wireless_families)
+from .metrics import (Family, alarm_families, aruba_families, device_families, mist_os_families, render,
+                      site_ap_families, sle_families, wireless_families)
 from .mist_api import MistError
 
 log = logging.getLogger("mist_exporter")
@@ -25,7 +25,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "sites": {}}, "sle": {}, "aruba": {}}
+                      "clients": {"ap": [], "sites": {}, "os": {}}, "sle": {}, "aruba": {}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -78,7 +78,18 @@ class Collector:
             active = [s["id"] for s in self._data["site_stats"] if s.get("id") and s.get("num_clients")]
         return {"ap": self.client.client_counts("ap", win),
                 "sites": {sid: {d: self.client.client_counts(d, win, site_id=sid) for d in ("band", "ssid")}
-                          for sid in active}}
+                          for sid in active},
+                "os": self._fetch_os(win)}
+
+    def _fetch_os(self, win):
+        """Operating systems on the two adoption SSIDs. A failure here is skipped, not fatal to the other counts."""
+        out = {}
+        for ssid in (self.cfg.pn_ssid, self.cfg.mc_ssid):
+            try:
+                out[ssid] = self.client.client_counts("os", win, ssid=ssid)
+            except MistError as e:
+                log.warning("client OS counts for one SSID failed: %s", e)
+        return out
 
     def _fetch_sle(self):
         """SLE summaries (and per-AP detail for coverage/capacity) for each site that has clients.
@@ -154,7 +165,7 @@ class Collector:
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
                     + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()
-                    + aruba_families(aruba_data))
+                    + mist_os_families(clients.get("os", {})) + aruba_families(aruba_data))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",

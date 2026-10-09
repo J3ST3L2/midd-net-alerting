@@ -20,6 +20,9 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
   - *Mist Wifi Troubleshooting*: Mist SLE scores per site (coverage, capacity, time to connect, roaming,
     throughput), the APs behind coverage and capacity problems, APs that dropped offline or rebooted,
     and band share. Start here for a "wifi is bad in building X" complaint.
+  - *PantherNet Adoption*: the campus-wide number, Mist and Aruba added together: devices and share on each
+    network, share over time per platform, operating systems, adoption by operating system, and the Mist
+    sign-in problem numbers. Start here for "how far along is PantherNet?".
   - *Aruba Wireless*: the Aruba side of PantherNet adoption, read from the Aruba controllers: devices and
     PantherNet share, people on both networks, roles, device types, bands, and controller health.
   - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
@@ -207,6 +210,16 @@ sudo docker compose stop exporter && sudo docker volume rm mist-dashboard_export
 A database error (disk full, corrupt file) switches the cache off with one log line and the exporter carries on
 in memory; it never stops the exporter.
 
+## Operating systems and the campus-wide view
+
+Mist reports an OS per client (`clients/count?distinct=os`, queried once per adoption SSID each minute) and the
+Aruba controllers report a device type. `osfamily.py` folds both into one list (macOS, iOS, Windows, Android,
+Linux, ChromeOS, Other, Unknown), exported as `mist_ssid_os_clients{ssid,os}` and `aruba_ssid_os_clients{ssid,os}`,
+so the *PantherNet Adoption* dashboard can chart them together. The campus numbers there are the devices connected
+right now on both platforms (Mist counts a client seen in the last 30 minutes, `CLIENT_WINDOW`; Aruba is the
+controllers' live tables). A device that roams between a Mist and an Aruba building inside that window can be
+counted once on each side, which is a rounding error at this scale.
+
 ## Aruba controllers (Aruba Wireless dashboard)
 
 The exporter can read the Aruba side of the campus from the controllers' own REST API, so PantherNet adoption
@@ -236,7 +249,7 @@ that cannot be reached keeps its last count for 3 poll intervals, then drops out
 
 **Metrics:** `aruba_clients{ssid}`, `aruba_controller_clients{controller,ssid}`, `aruba_ssid_role_clients{ssid,role}`,
 `aruba_ssid_device_clients{ssid,device_type}`, `aruba_ssid_band_clients{ssid,band}`, `aruba_ssid_auth_clients{ssid,auth}`,
-`aruba_ssid_people{ssid}`, `aruba_people_on_both_ssids`, `aruba_controller_up{controller}`,
+`aruba_ssid_os_clients{ssid,os}`, `aruba_ssid_people{ssid}`, `aruba_people_on_both_ssids`, `aruba_controller_up{controller}`,
 `aruba_controller_users`, `aruba_controller_poll_seconds`, `aruba_controller_data_age_seconds`.
 `mist_exporter_*` metrics include `source="aruba"`.
 
