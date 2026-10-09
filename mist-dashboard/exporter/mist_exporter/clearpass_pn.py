@@ -35,7 +35,8 @@ from .pn_fallback import normalize_username
 USER = ("username", "suser", "duser", "user")
 MAC = ("callingstationid", "smac", "srcmac", "clientmac", "macaddress", "mac")
 SSID = ("arubaessidname", "essidname", "essid", "ssid")
-NAS = ("nasipaddress", "nasip", "nasaddress")      # the access point or controller that sent the RADIUS request
+NAS = ("nasipaddress", "nasip", "nasaddress", "src")   # the access point or controller that sent the request
+SERVICE = ("destinationservicename", "servicename", "service")   # the ClearPass service that handled it
 CALLED = ("calledstationid",)                      # "AA-BB-CC-DD-EE-FF:SSID" on some templates
 STATUS = ("loginstatus", "outcome", "authstatus", "result", "status")
 ERROR = ("errorcode", "reason", "alerts", "msg", "message")
@@ -59,14 +60,14 @@ MAX_LINE = 16384
 _SHAPE_KEY = re.compile(r"(?:^|(?<=[\s|]))([A-Za-z][\w.\-]*)=")
 
 
-def shape(raw, limit=400):
+def shape(raw, limit=1500):
     """The layout of a record with every value masked: keys (a word followed by "=", at the start or after
     whitespace or "|") are kept, every other word, number, address and name becomes "x", separators are kept.
     The value of a CEF "...Label" key is kept too: it names a field (cs1Label=Auth.Username), it is not data.
     Safe to log: it shows the format of a record without any username, MAC, address or SSID in it."""
     s = raw[:limit]
     keys = {m.start(): m for m in _SHAPE_KEY.finditer(s)}
-    out, i, keep = [], 0, False
+    out, i, keep = [], 0, False                      # keep: inside the value of a "...Label" key
     for m in re.finditer(r"[\w.:@\/+\-]+", s):
         if m.start() < i:
             continue                                 # inside a key already emitted
@@ -77,8 +78,8 @@ def shape(raw, limit=400):
             keep = key.group(1).lower().endswith("label")
             i = key.end()
         elif keep:
-            out.append(m.group(0))                   # a label's value
-            keep, i = False, m.end()
+            out.append(m.group(0))                   # a label's value, up to the next key
+            i = m.end()
         else:
             out.append("x")
             i = m.end()
@@ -104,6 +105,12 @@ def parse_fields(raw):
     for i, hit in enumerate(hits):
         end = hits[i + 1].start() if i + 1 < len(hits) else len(ext)
         fields.setdefault(hit.group(1), ext[hit.end():end].strip())
+    # CEF sends a custom column as csN=value plus csNLabel=Column Name. The label is the field's real name,
+    # so make the value readable under it as well ("cs4Label=Login Status" -> "Login Status").
+    for key in [k for k in fields if k.endswith("Label") and len(k) > 5]:
+        base, label = key[:-5], fields[key]
+        if label and base in fields:
+            fields.setdefault(label, fields[base])
     return fields
 
 
@@ -175,6 +182,7 @@ class ClearPassTracker:
         self._last_unmapped_raw = ""                       # memory only; shown only as a masked layout
         self._last_event = 0
         self._field_names = collections.Counter()
+        self._services, self._ssids = collections.Counter(), collections.Counter()   # names of networks, not people
         self._cache = (0, None)
 
     def platform_of(self, nas):
@@ -197,7 +205,10 @@ class ClearPassTracker:
                 for k in fields:
                     if len(self._field_names) < MAX_FIELD_NAMES:
                         self._field_names[k] += 1
+                self._bump(self._services, _pick(fields, SERVICE)[:80])
                 rec = extract(fields)
+                if rec is not None:
+                    self._bump(self._ssids, rec["ssid"][:80])
                 if rec is None or not rec["ssid"] or not (rec["user"] or rec["mac"]):
                     self.unmapped += 1
                     self._last_unmapped_raw = raw[:MAX_LINE]
@@ -242,6 +253,17 @@ class ClearPassTracker:
                     stamps.append(now)
         elif ssid == self.pn_ssid:
             self._fails.append((now, user, mac, rec["reason"], rec["platform"]))
+
+    @staticmethod
+    def _bump(counter, value):
+        """Count a non-personal value (a service or SSID name), keeping at most 50 distinct ones."""
+        if value and (value in counter or len(counter) < 50):
+            counter[value] += 1
+
+    def top_values(self, top=8):
+        """(service names, SSIDs) seen, busiest first. These name networks and ClearPass services only."""
+        with self._lock:
+            return self._services.most_common(top), self._ssids.most_common(top)
 
     def field_names(self):
         """Names (never values) of the fields seen so far: what to map if the export differs."""
