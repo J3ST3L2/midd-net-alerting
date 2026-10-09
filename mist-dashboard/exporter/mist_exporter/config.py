@@ -39,6 +39,14 @@ class Config:
     fallback_pages_per_slice: int = 16      # event pages per slice, split between the two feeds
     fallback_lookups_per_slice: int = 24    # username / connection lookups per slice
     fallback_totals_interval: int = 300     # unique-client totals per SSID
+    # ClearPass syslog feed for the Aruba side (see clearpass_pn.py). Off unless enabled, and it refuses
+    # to start without an allow-list of ClearPass source addresses.
+    clearpass_enabled: bool = False
+    clearpass_host: str = "0.0.0.0"
+    clearpass_port: int = 5514
+    clearpass_allow: str = ""
+    clearpass_min_history_h: int = 24       # event-based counts are withheld until this much has been received
+    clearpass_noise_codes: str = ""         # ClearPass error codes not counted as failures (comma separated)
     pn_ssid: str = "PantherNet"
     mc_ssid: str = "MiddleburyCollege"
     mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
@@ -70,6 +78,12 @@ def load():
         fallback_pages_per_slice=int(env("FALLBACK_PAGES_PER_SLICE", "16")),
         fallback_lookups_per_slice=int(env("FALLBACK_LOOKUPS_PER_SLICE", "24")),
         fallback_totals_interval=int(env("FALLBACK_TOTALS_INTERVAL_S", "300")),
+        clearpass_enabled=env("CLEARPASS_SYSLOG_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
+        clearpass_host=env("CLEARPASS_SYSLOG_HOST", "0.0.0.0").strip(),
+        clearpass_port=int(env("CLEARPASS_SYSLOG_PORT", "5514")),
+        clearpass_allow=env("CLEARPASS_ALLOW", "").strip(),
+        clearpass_min_history_h=int(env("CLEARPASS_MIN_HISTORY_H", "24")),
+        clearpass_noise_codes=env("CLEARPASS_NOISE_CODES", "").strip(),
         pn_ssid=env("PN_SSID", "PantherNet").strip(),
         mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
         mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),

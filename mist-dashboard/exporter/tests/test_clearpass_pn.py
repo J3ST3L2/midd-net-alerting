@@ -1,0 +1,302 @@
+import os
+import socket
+import sys
+import time
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from mist_exporter import clearpass_pn  # noqa: E402
+from mist_exporter.clearpass_pn import ClearPassTracker, extract, parse_fields  # noqa: E402
+from mist_exporter.collector import Collector  # noqa: E402
+from mist_exporter.config import Config  # noqa: E402
+from mist_exporter.metrics import render  # noqa: E402
+from mist_exporter.syslog_listener import Listener, parse_allow  # noqa: E402
+
+PN, MC = "PantherNet", "MiddleburyCollege"
+WINDOW = 1800
+# Fake identities: they must never appear in exported text or in a log line.
+NAMES = ["zz-a", "zz-b", "zz-c", "zz-d", "zz-e"]
+MACS = ["aabbcc000001", "aabbcc000002", "aabbcc000003", "aabbcc000004", "aabbcc000005", "aabbcc00000f"]
+
+
+def cef(user, mac, outcome, ssid, code="", pri="<134>Oct  8 10:00:00 cppm "):
+    ext = "suser=%s smac=%s outcome=%s Aruba-Essid-Name=%s" % (user, mac, outcome, ssid)
+    if code:
+        ext += " Error-Code=%s msg=RADIUS authentication failed" % code
+    return pri + "CEF:0|Aruba|ClearPass|6.11|1|Radius Auth|3|" + ext
+
+
+class Clock:
+    def __init__(self):
+        self.t = 1_800_000_000.0
+
+    def __call__(self):
+        return self.t
+
+
+def tracker(clock, **kw):
+    args = dict(pn_ssid=PN, mc_ssid=MC, window_s=WINDOW, lookback_s=86400, min_history_s=0, clock=clock)
+    args.update(kw)
+    return ClearPassTracker(**args)
+
+
+def value(fams, name, **labels):
+    for f in fams:
+        if f.name == name:
+            for l, v in f.samples:
+                if all(l.get(k) == want for k, want in labels.items()):
+                    return v
+    return None
+
+
+class Parsing(unittest.TestCase):
+    def test_cef_with_syslog_header(self):
+        f = parse_fields(cef("zz-a@example.test", "AA-BB-CC-00-00-01", "Accept", PN))
+        self.assertEqual((f["suser"], f["outcome"], f["Aruba-Essid-Name"]), ("zz-a@example.test", "Accept", PN))
+        self.assertEqual(f["cefname"], "Radius Auth")
+
+    def test_plain_key_value_with_dotted_names_and_spaces_in_values(self):
+        f = parse_fields("Common.Username=zz-a Common.Calling-Station-Id=AA-BB-CC-00-00-01 "
+                         "Common.Login-Status=REJECT RADIUS.Aruba-Essid-Name=Panther Net Error-Code=9002")
+        rec = extract(f)
+        self.assertEqual((rec["user"], rec["mac"], rec["status"], rec["ssid"], rec["reason"]),
+                         ("zz-a", "aabbcc000001", "reject", "Panther Net", "9002"))
+
+    def test_extract_normalises_and_buckets(self):
+        r = extract(parse_fields(cef("EXAMPLE\\ZZ-B", "AA:BB:CC:00:00:02", "REJECT", PN, code="9005")))
+        self.assertEqual((r["user"], r["mac"], r["reason"]), ("zz-b", "aabbcc000002", "9005"))
+        r = extract(parse_fields("username=zz-a callingstationid=aabbcc000001 status=Timeout essid=PantherNet "
+                                 "msg=request timeout"))
+        self.assertEqual((r["status"], r["reason"]), ("reject", "timeout"))
+        r = extract(parse_fields("username=zz-a status=Failed essid=PantherNet msg=something odd"))
+        self.assertEqual(r["reason"], "other")
+
+    def test_ssid_from_called_station_id_when_no_ssid_field(self):
+        r = extract(parse_fields("suser=zz-a smac=aabbcc000001 outcome=Accept Called-Station-Id=11-22-33-44-55-66:PantherNet"))
+        self.assertEqual(r["ssid"], "PantherNet")
+
+    def test_hostile_input_is_parsed_in_linear_time(self):
+        started = time.time()
+        for junk in ["x" * 200000, "a=" * 100000, "a b " * 50000, ("k=v " * 5000) + "y" * 100000,
+                     "CEF:" + "|" * 100000]:
+            parse_fields(junk)
+        self.assertLess(time.time() - started, 2.0)
+
+    def test_records_that_are_not_authentication_results(self):
+        self.assertIsNone(extract(parse_fields("hello world")))
+        self.assertIsNone(extract(parse_fields("suser=zz-a outcome=Pending")))
+        self.assertEqual(parse_fields(""), {})
+
+
+class Tracking(unittest.TestCase):
+    def setUp(self):
+        self.clock = Clock()
+        self.t = tracker(self.clock)
+        t0 = self.clock.t
+
+        def at(offset, line):
+            self.clock.t = t0 + offset
+            self.t.handle_line(line)
+
+        # A: fails on PantherNet, then succeeds on MiddleburyCollege 10 minutes later -> fallback
+        at(0, cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        at(600, cef("zz-a", "AA-BB-CC-00-00-0F", "Accept", MC))
+        # B: fails, MiddleburyCollege only 40 minutes later (outside the window) -> eligible, not fallback
+        at(10, cef("zz-b", "AA-BB-CC-00-00-02", "Reject", PN, "9002"))
+        at(2410, cef("zz-b", "AA-BB-CC-00-00-02", "Accept", MC))
+        # C: fails right at the end, not old enough to judge
+        at(5000, cef("zz-c", "AA-BB-CC-00-00-03", "Reject", PN, "9005"))
+        # D: no username on the record -> unresolved, never in the fallback maths
+        at(20, "suser= smac=AA-BB-CC-00-00-04 outcome=Reject Aruba-Essid-Name=PantherNet Error-Code=9002")
+        # E: succeeds on PantherNet (adoption) and on MiddleburyCollege
+        at(30, cef("zz-e", "AA-BB-CC-00-00-05", "Accept", PN))
+        at(40, cef("zz-e", "AA-BB-CC-00-00-05", "Accept", MC))
+        self.clock.t = t0 + 5100                                   # judge from here
+        self.fams = self.t.families(ttl=0)
+
+    def test_counts(self):
+        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_events"), 4.0)        # A, B, C, D
+        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_clients"), 3.0)        # A, B, C
+        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_clients_unresolved"), 1.0)
+        self.assertEqual(value(self.fams, "aruba_pn_failure_reason_events", reason="9002"), 3.0)
+        self.assertEqual(value(self.fams, "aruba_pn_failure_reason_events", reason="9005"), 1.0)
+
+    def test_fallback_judges_only_matured_failures(self):
+        self.assertEqual(value(self.fams, "aruba_pn_fallback_eligible_clients", match="user"), 2.0)   # A, B
+        self.assertEqual(value(self.fams, "aruba_pn_fallback_clients", match="user"), 1.0)            # A
+        self.assertAlmostEqual(value(self.fams, "aruba_pn_fallback_rate", match="user"), 0.5)
+
+    def test_unique_clients_count_devices_with_a_successful_auth(self):
+        self.assertEqual(value(self.fams, "aruba_pn_unique_clients", ssid=PN), 1.0)   # only E succeeded on PN
+        self.assertEqual(value(self.fams, "aruba_pn_unique_clients", ssid=MC), 3.0)   # A's second MAC, B, E
+
+    def test_failure_that_matures_later_becomes_eligible(self):
+        self.clock.t += WINDOW
+        fams = self.t.families(ttl=0)
+        self.assertEqual(value(fams, "aruba_pn_fallback_eligible_clients", match="user"), 3.0)
+
+    def test_nothing_eligible_means_no_rate_sample(self):
+        t = tracker(self.clock)
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        self.assertIsNone(value(t.families(ttl=0), "aruba_pn_fallback_rate"))
+
+    def test_events_age_out_of_the_window(self):
+        self.clock.t += 90000
+        fams = self.t.families(ttl=0)
+        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 0.0)
+        self.assertEqual(value(fams, "aruba_pn_unique_clients", ssid=MC), 0.0)
+
+    def test_noise_codes_are_not_counted_but_still_charted(self):
+        t = tracker(self.clock, noise=["9005"])
+        t.handle_line(cef("zz-c", "AA-BB-CC-00-00-03", "Reject", PN, "9005"))
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        fams = t.families(ttl=0)
+        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 1.0)
+        self.assertEqual(value(fams, "aruba_pn_failure_reason_events", reason="9005"), 1.0)
+
+    def test_reason_labels_are_bounded(self):
+        t = tracker(self.clock)
+        for code in range(1000, 1040):
+            t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, str(code)))
+        reasons = [f for f in t.families(ttl=0) if f.name == "aruba_pn_failure_reason_events"][0].samples
+        self.assertLessEqual(len(reasons), 13)
+        self.assertEqual(sum(v for _, v in reasons), 40.0)
+
+    def test_counts_are_withheld_until_enough_history_then_released(self):
+        t = tracker(self.clock, min_history_s=3600)
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        fams = t.families(ttl=0)
+        self.assertIsNone(value(fams, "aruba_pn_auth_failure_events"))             # withheld
+        self.assertEqual(value(fams, "aruba_pn_history_complete"), 0.0)             # status still visible
+        self.assertEqual(value(fams, "aruba_pn_events_received_total"), 1.0)
+        self.clock.t += 3601
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        fams = t.families(ttl=0)
+        self.assertEqual(value(fams, "aruba_pn_history_complete"), 1.0)
+        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 2.0)
+
+    def test_garbage_never_raises_and_is_counted(self):
+        for junk in ["", "\x00\x01", "CEF:0|only|two", "=====", "a=b c=d", "x" * 100000]:
+            self.assertFalse(self.t.handle_line(junk))
+        self.assertGreaterEqual(value(self.t.families(ttl=0), "aruba_pn_unmapped_events_total"), 6.0)
+
+    def test_memory_is_bounded_under_a_flood(self):
+        old = (clearpass_pn.MAX_EVENTS, clearpass_pn.MAX_CLIENTS, clearpass_pn.MAX_PER_USER)
+        clearpass_pn.MAX_EVENTS, clearpass_pn.MAX_CLIENTS, clearpass_pn.MAX_PER_USER = 50, 40, 3
+        self.addCleanup(lambda: setattr(clearpass_pn, "MAX_EVENTS", old[0]) or
+                        setattr(clearpass_pn, "MAX_CLIENTS", old[1]) or setattr(clearpass_pn, "MAX_PER_USER", old[2]))
+        t = tracker(self.clock)                          # built after the caps were lowered
+        for i in range(500):
+            t.handle_line(cef("zz-%d" % i, "%012x" % i, "Reject", PN, "9002"))
+            t.handle_line(cef("zz-%d" % i, "%012x" % i, "Accept", MC))
+        for _ in range(10):
+            t.handle_line(cef("zz-0", "%012x" % 0, "Accept", MC))
+        fams = t.families(ttl=0)
+        self.assertLessEqual(value(fams, "aruba_pn_auth_failure_events"), 50.0)
+        self.assertLessEqual(value(fams, "aruba_pn_unique_clients", ssid=MC), 40.0)
+        self.assertLessEqual(len(t._mc_ok["zz-0"]), 3)
+
+    def test_other_ssids_are_ignored(self):
+        self.t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", "eduroam"))
+        self.assertEqual(value(self.t.families(ttl=0), "aruba_pn_unique_clients", ssid=PN), 1.0)
+
+
+class Privacy(unittest.TestCase):
+    def test_nothing_identifying_is_exported_or_logged(self):
+        clock = Clock()
+        t = tracker(clock)
+        with self.assertNoLogs("mist_exporter"):
+            for n, m in zip(NAMES, MACS):
+                t.handle_line(cef(n + "@example.test", m, "Reject", PN, "9002"))
+                t.handle_line(cef(n, m, "Accept", MC))
+            t.handle_line("garbage " + NAMES[0])
+        text = render(t.families(ttl=0)).lower()
+        for secret in NAMES + MACS:
+            self.assertNotIn(secret, text)
+        self.assertNotIn("user=", text)
+        self.assertNotIn("mac=", text)
+
+    def test_field_names_are_remembered_but_values_are_not(self):
+        t = tracker(Clock())
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
+        names = t.field_names()
+        self.assertIn("suser", names)
+        self.assertNotIn("zz-a", " ".join(names).lower())
+
+
+def wait_for(predicate, timeout=3.0):
+    end = time.time() + timeout
+    while time.time() < end:
+        if predicate():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+class Sockets(unittest.TestCase):
+    def make(self, allow):
+        t = tracker(Clock())
+        listener = Listener("127.0.0.1", 0, t, parse_allow(allow), describe_every=3600)
+        listener.start()
+        self.addCleanup(listener.stop)
+        return t, listener
+
+    def test_udp_and_tcp_records_are_ingested(self):
+        t, l = self.make("127.0.0.0/8")
+        u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        u.sendto(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", PN).encode(), ("127.0.0.1", l.udp_port))
+        u.close()
+        self.assertTrue(wait_for(lambda: t.received >= 1))
+        c = socket.create_connection(("127.0.0.1", l.tcp_port))
+        line = cef("zz-b", "AA-BB-CC-00-00-02", "Accept", PN)
+        c.sendall((line + "\n" + "%d %s\n" % (len(line), line)).encode())      # plain, then octet-counted
+        c.close()
+        self.assertTrue(wait_for(lambda: t.received >= 3))
+
+    def test_sources_outside_the_allow_list_are_dropped_unparsed(self):
+        t, l = self.make("10.0.0.0/8")
+        u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        u.sendto(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", PN).encode(), ("127.0.0.1", l.udp_port))
+        u.close()
+        self.assertTrue(wait_for(lambda: t.dropped >= 1))
+        self.assertEqual(t.received, 0)
+
+    def test_stranger_over_tcp_is_dropped_and_cannot_hold_a_slot(self):
+        t, l = self.make("10.0.0.0/8")
+        held = [socket.create_connection(("127.0.0.1", l.tcp_port)) for _ in range(40)]   # > 16 slots
+        self.addCleanup(lambda: [c.close() for c in held])
+        self.assertTrue(wait_for(lambda: t.dropped >= 40))
+        self.assertEqual(t.received, 0)
+        # the slots were never taken, so an allowed sender is still served
+        l.allow = parse_allow("127.0.0.0/8")
+        ok = socket.create_connection(("127.0.0.1", l.tcp_port))
+        ok.sendall((cef("zz-a", "AA-BB-CC-00-00-01", "Accept", PN) + "\n").encode())
+        ok.close()
+        self.assertTrue(wait_for(lambda: t.received >= 1))
+
+    def test_refuses_to_start_without_an_allow_list(self):
+        with self.assertRaises(ValueError):
+            Listener("127.0.0.1", 0, tracker(Clock()), [])
+
+    def test_allow_list_parsing(self):
+        nets = parse_allow("192.0.2.10, 198.51.100.0/24  203.0.113.5")
+        self.assertEqual(len(nets), 3)
+        self.assertEqual(parse_allow(""), [])
+        with self.assertRaises(ValueError):
+            parse_allow("not-an-address")
+
+
+class CollectorIntegration(unittest.TestCase):
+    def test_render_exposes_the_aruba_metrics_and_status(self):
+        c = Collector(Config(clearpass_min_history_h=0), object(), clock=Clock())
+        c.clearpass.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", PN))
+        text = c.render()
+        self.assertIn("# TYPE aruba_pn_unique_clients gauge", text)
+        self.assertIn('aruba_pn_unique_clients{ssid="PantherNet"} 1', text)
+        self.assertIn("aruba_pn_events_received_total 1", text)
+        self.assertNotIn("zz-a", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

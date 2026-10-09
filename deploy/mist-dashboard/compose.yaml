@@ -32,6 +32,17 @@ services:
       FALLBACK_PAGES_PER_SLICE: ${FALLBACK_PAGES_PER_SLICE:-16}
       FALLBACK_LOOKUPS_PER_SLICE: ${FALLBACK_LOOKUPS_PER_SLICE:-24}
       MC_EVENT_TYPE: ${MC_EVENT_TYPE:-CLIENT_AUTH_ASSOCIATION}
+      # Aruba side: ClearPass pushes authentication records here over syslog. Off unless enabled, and it
+      # refuses to start without CLEARPASS_ALLOW (the ClearPass source addresses). See README.
+      CLEARPASS_SYSLOG_ENABLED: ${CLEARPASS_SYSLOG_ENABLED:-false}
+      CLEARPASS_SYSLOG_PORT: "5514"
+      CLEARPASS_ALLOW: ${CLEARPASS_ALLOW:-}
+      CLEARPASS_MIN_HISTORY_H: ${CLEARPASS_MIN_HISTORY_H:-24}
+      CLEARPASS_NOISE_CODES: ${CLEARPASS_NOISE_CODES:-}
+    # Loopback by default, so nothing is exposed until CLEARPASS_SYSLOG_BIND is set to gravitron's address.
+    ports:
+      - "${CLEARPASS_SYSLOG_BIND:-127.0.0.1}:${CLEARPASS_SYSLOG_HOST_PORT:-5514}:5514/udp"
+      - "${CLEARPASS_SYSLOG_BIND:-127.0.0.1}:${CLEARPASS_SYSLOG_HOST_PORT:-5514}:5514/tcp"
     secrets:
       - mist_api_token
     networks:
