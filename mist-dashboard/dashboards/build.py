@@ -583,9 +583,91 @@ def wifi_view():
                      "Where wifi is degraded: client experience by site, the APs behind it, and AP stability.")
 
 
+ARUBA_NOTE = ("Counted from the Aruba controllers' own client tables every 2 minutes, one device per MAC. "
+              "A controller that stops answering keeps its last count for 6 minutes, then drops out and shows "
+              "as unreachable.")
+ARUBA_PN, ARUBA_MC = 'sum(aruba_clients{ssid="PantherNet"})', 'sum(aruba_clients{ssid="MiddleburyCollege"})'
+ARUBA_SHARE = "100 * %s / (%s + %s)" % (ARUBA_PN, ARUBA_PN, ARUBA_MC)
+ARUBA_AGE = 'time() - min(mist_exporter_last_success_timestamp_seconds{source="aruba"})'
+
+
+def aruba_view():
+    both = 'ssid=~"PantherNet|MiddleburyCollege"'
+    p = [
+        stat("Devices on Aruba Wi-Fi", 0, 0, 5, "sum(aruba_clients)",
+             "Wireless devices connected to the Aruba controllers right now, all SSIDs. " + ARUBA_NOTE),
+        stat("Devices on PantherNet", 5, 0, 5, ARUBA_PN, "Devices connected to PantherNet on the Aruba side right now."),
+        stat("PantherNet share", 10, 0, 5, ARUBA_SHARE,
+             "Of the devices on PantherNet or MiddleburyCollege right now, the percentage on PantherNet. "
+             "This is the Aruba side of the adoption number.", unit="percent"),
+        stat("People on both networks", 15, 0, 5, "aruba_people_on_both_ssids",
+             "People (counted by username) with a device on PantherNet and another on MiddleburyCollege at this "
+             "moment. Often someone who has moved some devices over and not others."),
+        stat("Controllers unreachable", 20, 0, 4, "count(aruba_controller_up == 0) or vector(0)",
+             "Controllers that did not answer the last poll. Their last count is kept for 6 minutes.",
+             thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
+
+        timeseries("Devices by SSID over time", 0, 4, 12, 9, [target("aruba_clients", "{{ssid}}")],
+                   "Devices connected, per SSID. " + ARUBA_NOTE, stack=True),
+        timeseries("PantherNet share over time", 12, 4, 12, 9, [target(ARUBA_SHARE, "PantherNet share")],
+                   "The adoption percentage as it moves through the day: a line going up means more devices are on "
+                   "PantherNet. It is a snapshot of who is connected, so it follows the school calendar.",
+                   unit="percent", min_=None),
+
+        bargauge("Who is on PantherNet and MiddleburyCollege", 0, 13, 12, 9,
+                 "sort_desc(aruba_ssid_role_clients{%s})" % both, "{{ssid}} - {{role}}",
+                 "Devices by the role the controller gave them. PantherNet roles say how the device is managed; "
+                 "MiddleburyCollege roles say who the person is. AD-FAIL-THRU is a device that signed in but whose "
+                 "directory lookup failed."),
+        timeseries("People on each network", 12, 13, 12, 9,
+                   [target('aruba_ssid_people{%s}' % both, "{{ssid}}"),
+                    target("aruba_people_on_both_ssids", "On both", ref="B")],
+                   "Distinct people (not devices) on each network, and how many are on both. One person with a "
+                   "phone and a laptop counts once."),
+
+        bargauge("Device types on PantherNet", 0, 22, 12, 9,
+                 'sort_desc(aruba_ssid_device_clients{ssid="PantherNet"})', "{{device_type}}",
+                 "What the controller says the device is. 'unknown' is a device it could not identify."),
+        bargauge("Device types on MiddleburyCollege", 12, 22, 12, 9,
+                 'sort_desc(aruba_ssid_device_clients{ssid="MiddleburyCollege"})', "{{device_type}}",
+                 "The same view for the old network: where the devices that have not moved are coming from."),
+
+        timeseries("Radio band by network", 0, 31, 12, 8,
+                   [target('sum by (ssid, band) (aruba_ssid_band_clients{%s})' % both, "{{ssid}} {{band}}")],
+                   "Devices on 2.4 GHz and 5 GHz, per network.", stack=True),
+        bargauge("Devices per controller", 12, 31, 12, 8,
+                 "sort_desc(sum by (controller) (aruba_controller_clients))", "{{controller}}",
+                 "How the wireless load is spread across the controllers."),
+
+        table("Controllers", 0, 39, 24, 8,
+              [target("aruba_controller_up", fmt="table", instant=True),
+               target("aruba_controller_users", fmt="table", instant=True, ref="B"),
+               target("aruba_controller_poll_seconds", fmt="table", instant=True, ref="C"),
+               target("aruba_controller_data_age_seconds", fmt="table", instant=True, ref="D")],
+              "Each controller's last poll. 'Reachable' is whether it answered the last time; 'Data age' is how old "
+              "the numbers being counted are.", merge=True,
+              rename={"controller": "Controller", "Value #A": "Reachable", "Value #B": "Devices",
+                      "Value #C": "Poll time", "Value #D": "Data age"},
+              order=["Controller", "Reachable", "Devices", "Poll time", "Data age"], sort="Devices",
+              overrides=[
+                  {"matcher": {"id": "byName", "options": "Reachable"}, "properties": [
+                      {"id": "mappings", "value": [{"type": "value", "options": {
+                          "1": {"text": "Yes", "color": GREEN}, "0": {"text": "No", "color": RED}}}]},
+                      {"id": "custom.cellOptions", "value": {"type": "color-text"}}]},
+                  {"matcher": {"id": "byName", "options": "Poll time"}, "properties": [{"id": "unit", "value": "s"}]},
+                  {"matcher": {"id": "byName", "options": "Data age"}, "properties": [{"id": "unit", "value": "s"}]}]),
+        stat("Data age", 0, 47, 6, ARUBA_AGE, "Seconds since the Aruba counts last refreshed.", unit="s",
+             thresholds=steps((GREEN, None), (AMBER, 300), (RED, 900)), color_mode="background"),
+    ]
+    return dashboard("aruba-wireless", "Aruba Wireless", p, [],
+                     "Aruba client counts and PantherNet adoption, read from the Aruba controllers.",
+                     time_from="now-7d", tags=("mist", "aruba"))
+
+
 def build():
     return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
-            "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view()}
+            "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view(),
+            "aruba-wireless.json": aruba_view()}
 
 
 def render(d):

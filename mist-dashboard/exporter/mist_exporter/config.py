@@ -47,6 +47,13 @@ class Config:
     pn_ssid: str = "PantherNet"
     mc_ssid: str = "MiddleburyCollege"
     mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
+    # Aruba controllers, read-only (see aruba.py). Off unless controllers and a password are configured.
+    aruba_controllers: tuple = ()
+    aruba_user: str = "grafana-ro"
+    aruba_password: str = field(default="", repr=False)
+    aruba_interval: int = 120
+    aruba_ca_file: str = ""           # verify the controllers' certificates against this CA; empty = self-signed ok
+    aruba_timeout: int = 60
     alarm_window_hours: int = 24
     page_limit: int = 100
     max_pages: int = 20
@@ -81,6 +88,12 @@ def load():
         pn_ssid=env("PN_SSID", "PantherNet").strip(),
         mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
         mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),
+        aruba_controllers=tuple(h.strip() for h in env("ARUBA_CONTROLLERS", "").split(",") if h.strip()),
+        aruba_user=env("ARUBA_USER", "grafana-ro").strip(),
+        aruba_password=_read_secret("ARUBA_PASSWORD_FILE", "ARUBA_PASSWORD"),
+        aruba_interval=int(env("ARUBA_INTERVAL_S", "120")),
+        aruba_ca_file=env("ARUBA_CA_FILE", "").strip(),
+        aruba_timeout=int(env("ARUBA_TIMEOUT_S", "60")),
         alarm_window_hours=int(env("ALARM_WINDOW_HOURS", "24")),
         page_limit=int(env("PAGE_LIMIT", "100")),
         max_pages=int(env("MAX_PAGES", "20")),
