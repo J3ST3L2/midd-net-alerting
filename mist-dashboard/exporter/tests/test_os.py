@@ -73,6 +73,12 @@ class VlanGroups(unittest.TestCase):
         got = {l["group"]: v for l, v in fams[0].samples}
         self.assertEqual(got, {"BYOD": 1471.0, "Managed": 288.0, "Other": 5.0})
 
+    def test_no_data_is_not_zero(self):
+        self.assertEqual(mist_group_families(None, ("302",), ("301",))[0].samples, [])    # before the first fetch
+        c = Collector(Config(devices_interval=60, pn_byod_vlans=("302",), pn_managed_vlans=("301",)),
+                      FakeClient(), Clock())
+        self.assertNotIn("mist_pn_group_clients{", c.render())                              # nothing fetched yet
+
     def test_off_until_configured(self):
         self.assertEqual(mist_group_families(self.ROWS, (), ())[0].samples, [])
 

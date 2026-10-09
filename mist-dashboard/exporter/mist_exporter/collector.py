@@ -25,7 +25,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "sites": {}, "os": {}, "vlan": []}, "sle": {}, "aruba": {}}
+                      "clients": {"ap": [], "sites": {}, "os": {}, "vlan": None}, "sle": {}, "aruba": {}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -82,14 +82,15 @@ class Collector:
                 "os": self._fetch_os(win), "vlan": self._fetch_vlan(win)}
 
     def _fetch_vlan(self, win):
-        """PantherNet clients per VLAN, only when the BYOD/managed VLANs are configured. Skipped on failure."""
+        """PantherNet clients per VLAN, only when the BYOD/managed VLANs are configured. None (no samples, not
+        zeros) when off or when the call failed, so a hiccup never draws a false dip."""
         if not (self.cfg.pn_byod_vlans or self.cfg.pn_managed_vlans):
-            return []
+            return None
         try:
             return self.client.client_counts("vlan", win, ssid=self.cfg.pn_ssid)
         except MistError as e:
             log.warning("client VLAN counts failed: %s", e)
-            return []
+            return None
 
     def _fetch_os(self, win):
         """Operating systems on the two adoption SSIDs. A failure here is skipped, not fatal to the other counts."""
@@ -176,7 +177,7 @@ class Collector:
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
                     + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()
                     + mist_os_families(clients.get("os", {}))
-                    + mist_group_families(clients.get("vlan", []), self.cfg.pn_byod_vlans,
+                    + mist_group_families(clients.get("vlan"), self.cfg.pn_byod_vlans,
                                           self.cfg.pn_managed_vlans)
                     + aruba_families(aruba_data))
         families += [
