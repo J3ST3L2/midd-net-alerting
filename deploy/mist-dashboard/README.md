@@ -73,29 +73,34 @@ If a count is 0, run `mist-poller/discovery/mist_devices_probe.py` (see its READ
 
 ## Reverse proxy
 
-`nginx/mist-dashboard.conf` serves Grafana at `https://keep.middlebury.edu/mist-dashboard/`.
-Include it in the existing `server` block, then `sudo nginx -t && sudo systemctl reload nginx`.
-`GRAFANA_ROOT_URL` must match the URL users type.
+Grafana is served at `https://gravitron.middlebury.edu/mist-dashboard/`. `keep.middlebury.edu` is for alerting
+only and serves none of it.
+
+1. **Certificate.** `gravitron.middlebury.edu` is issued by acme.sh (acme-dns) into `/etc/letsencrypt`. Copy it where
+   nginx reads it, and make every renewal do the same and reload nginx:
+
+   ```bash
+   sudo install -d -m 700 /etc/nginx/ssl/gravitron
+   sudo /opt/acme.sh/acme.sh --home /opt/acme.sh --config-home /etc/letsencrypt --install-cert --ecc      -d gravitron.middlebury.edu --key-file /etc/nginx/ssl/gravitron/privkey.pem      --fullchain-file /etc/nginx/ssl/gravitron/fullchain.pem --reloadcmd "systemctl reload nginx"
+   ```
+2. **nginx.** Copy `nginx/gravitron-dashboards.conf` to `/etc/nginx/conf.d/` (a whole `server` listening on 443 only;
+   the existing port-80 server for this name, which serves other tools, is untouched), then
+   `sudo nginx -t && sudo systemctl reload nginx`. Anything outside `/mist-dashboard/` is a 404.
+3. **Grafana.** Set `GRAFANA_ROOT_URL=https://gravitron.middlebury.edu/mist-dashboard/` in `.env` (it must match the
+   URL users type, with the trailing slash) and `sudo docker compose up -d`.
+
+Always use the `https://` address: the port-80 server for this name belongs to other tools.
 
 When Cloudflare Tunnel is added: point a hostname at `http://127.0.0.1:3000`, set
-`GRAFANA_ROOT_URL=https://<hostname>/`, remove the Nginx block, and
-`sudo docker compose up -d`. Put it behind Cloudflare Access; Grafana's own login stays as a
-second layer.
+`GRAFANA_ROOT_URL=https://<hostname>/`, remove the nginx file, and `sudo docker compose up -d`. Put it behind
+Cloudflare Access; Grafana's own login stays as a second layer.
 
 ## Sharing dashboards without logins
 
 Grafana's *Share > Share externally* makes a dashboard viewable by anyone holding its link (view only, no other
-dashboards, no queries beyond that dashboard's panels). To keep those links off `keep.middlebury.edu`, they are
-served from their own name:
-
-1. **Certificate.** Issue `gravitron.middlebury.edu` the same way as keep's (acme-dns) and place
-   `fullchain.pem` and `privkey.pem` in `/etc/nginx/ssl/gravitron/`.
-2. **nginx.** Copy `nginx/gravitron-shared.conf` to `/etc/nginx/conf.d/` (a whole `server` listening on 443 only;
-   the existing port-80 server for this name is untouched) and re-include `nginx/mist-dashboard.conf` in the keep
-   server, which now returns 404 for public-dashboard paths. Then `sudo nginx -t && sudo systemctl reload nginx`.
-3. **Share.** On a dashboard choose *Share > Share externally > Anyone with the link*. Grafana shows the link on
-   the keep name (`GRAFANA_ROOT_URL`); replace the host with `gravitron.middlebury.edu`:
-   `https://gravitron.middlebury.edu/mist-dashboard/public-dashboards/<token>`.
+dashboards, no queries beyond that dashboard's panels). The links are served by the same nginx server as Grafana
+(`/mist-dashboard/public-dashboards/<token>`), rate limited per visitor. On a dashboard choose *Share > Share
+externally > Anyone with the link*; Grafana shows the finished link.
 
 Good candidates are the dashboards with no drop-downs or drill-downs (*PantherNet Adoption*, *Aruba Wireless*);
 public dashboards do not support Grafana variables, so the Site and Device links on the others do not work there.
