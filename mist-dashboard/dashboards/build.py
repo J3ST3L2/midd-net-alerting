@@ -31,7 +31,8 @@ def steps(*pairs):
 
 
 def panel(kind, title, x, y, w, h, targets, desc="", unit=None, thresholds=None, options=None,
-          overrides=None, custom=None, transformations=None, decimals=None, mappings=None, min_=None, max_=None, links=None):
+          overrides=None, custom=None, transformations=None, decimals=None, mappings=None, min_=None, max_=None, links=None,
+          no_value=None):
     defaults = {"color": {"mode": "palette-classic"} if kind == "timeseries" else {"mode": "thresholds"}}
     if unit:
         defaults["unit"] = unit
@@ -49,6 +50,8 @@ def panel(kind, title, x, y, w, h, targets, desc="", unit=None, thresholds=None,
         defaults["max"] = max_
     if links:
         defaults["links"] = links
+    if no_value:
+        defaults["noValue"] = no_value
     p = {"type": kind, "title": title, "description": desc, "datasource": DS,
          "gridPos": {"x": x, "y": y, "w": w, "h": h}, "targets": targets,
          "fieldConfig": {"defaults": defaults, "overrides": overrides or []},
@@ -58,9 +61,10 @@ def panel(kind, title, x, y, w, h, targets, desc="", unit=None, thresholds=None,
     return p
 
 
-def stat(title, x, y, w, expr, desc="", unit="none", thresholds=None, color_mode="value", mappings=None):
+def stat(title, x, y, w, expr, desc="", unit="none", thresholds=None, color_mode="value", mappings=None,
+         no_value=None):
     return panel("stat", title, x, y, w, 4, [target(expr, instant=True)], desc, unit,
-                 thresholds or steps((BLUE, None)), mappings=mappings, decimals=0,
+                 thresholds or steps((BLUE, None)), mappings=mappings, decimals=0, no_value=no_value,
                  options={"colorMode": color_mode, "graphMode": "none", "textMode": "value",
                           "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}})
 
@@ -222,6 +226,10 @@ PN_FALLBACK_DEF = ("A client falls back when a counted PantherNet failure is fol
                    "Clients with no username are excluded.")
 
 
+LOADING = "Loading history"
+LOADING_NOTE = (" Blank ('Loading history') until the last 24 hours have been read after a restart, so a restart never shows a false low number.")
+
+
 PN_TREND_NOTE = ("Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; "
                  "widen the time picker to look further back (Prometheus keeps 180 days, building from when the "
                  "exporter first ran). Counts are held back while a restart reloads the history.")
@@ -263,15 +271,15 @@ def pn_adoption(y):
              "Of the devices on PantherNet or MiddleburyCollege in the last 24 hours, the percentage on "
              "PantherNet. This is the adoption number.", unit="percent"),
         stat("Users who failed to sign in", 10, top, 5, "mist_pn_auth_failure_clients",
-             "Unique users with at least one failed PantherNet sign-in in the last 24 hours. " + PN_FAILURE_DEF,
-             thresholds=steps((GREEN, None), (AMBER, 1))),
+             "Unique users with at least one failed PantherNet sign-in in the last 24 hours. " + PN_FAILURE_DEF + LOADING_NOTE,
+             thresholds=steps((GREEN, None), (AMBER, 1)), no_value=LOADING),
         stat("...who then used MiddleburyCollege", 15, top, 5, 'mist_pn_fallback_rate{match="user"}',
              "Of the failing users old enough to judge, the percentage who connected to MiddleburyCollege "
-             "within 30 minutes of failing. " + PN_FALLBACK_DEF, unit="percentunit",
-             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5))),
+             "within 30 minutes of failing. " + PN_FALLBACK_DEF + LOADING_NOTE, unit="percentunit",
+             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5)), no_value=LOADING),
         stat("Users judged", 20, top, 4, 'sum(mist_pn_fallback_eligible_clients{match="user"})',
              "Failing users old enough (30+ minutes) to judge, whose MiddleburyCollege connections were checked: "
-             "the base for the percentage beside it."),
+             "the base for the percentage beside it." + LOADING_NOTE, no_value=LOADING),
 
         timeseries("PantherNet share of devices over time", 0, top + 4, 12, 8,
                    [target(share, "PantherNet share")],
@@ -728,11 +736,12 @@ def pn_campus_view():
         row("Sign-in problems and overlap", 31),
         stat("Users who failed to sign in", 0, 32, 6, "mist_pn_auth_failure_clients",
              "Mist buildings only, last 24 hours: unique users with at least one failed PantherNet sign-in. "
-             "Aruba does not report failures. " + PN_FAILURE_DEF, thresholds=steps((GREEN, None), (AMBER, 1))),
+             "Aruba does not report failures. " + PN_FAILURE_DEF + LOADING_NOTE,
+             thresholds=steps((GREEN, None), (AMBER, 1)), no_value=LOADING),
         stat("...who then used MiddleburyCollege", 6, 32, 6, 'mist_pn_fallback_rate{match="user"}',
              "Mist buildings only: of the failing users old enough to judge, the percentage who connected to "
-             "MiddleburyCollege within 30 minutes. " + PN_FALLBACK_DEF, unit="percentunit",
-             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5))),
+             "MiddleburyCollege within 30 minutes. " + PN_FALLBACK_DEF + LOADING_NOTE, unit="percentunit",
+             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5)), no_value=LOADING),
         stat("People on both networks", 12, 32, 6, "aruba_people_on_both_ssids",
              "Aruba buildings only: people (by username) with a device on PantherNet and another on "
              "MiddleburyCollege right now."),

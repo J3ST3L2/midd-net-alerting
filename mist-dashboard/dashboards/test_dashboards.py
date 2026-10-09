@@ -115,6 +115,16 @@ class Dashboards(unittest.TestCase):
                   if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json")]
         self.assertEqual(set(others), {"now-6h"})
 
+    def test_history_dependent_boxes_say_loading_instead_of_no_data(self):
+        dashboards = build.build()
+        wanted = {"mist-wireless.json": {"Users who failed to sign in", "...who then used MiddleburyCollege",
+                                         "Users judged"},
+                  "pn-adoption.json": {"Users who failed to sign in", "...who then used MiddleburyCollege"}}
+        for name, titles in wanted.items():
+            found = {p["title"] for p in dashboards[name]["panels"]
+                     if p.get("fieldConfig", {}).get("defaults", {}).get("noValue") == "Loading history"}
+            self.assertEqual(found, titles, name)
+
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
             boxes = [(p["gridPos"], p["title"]) for p in d["panels"]]
