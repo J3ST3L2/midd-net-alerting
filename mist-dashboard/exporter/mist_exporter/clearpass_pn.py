@@ -55,6 +55,37 @@ _KEY = re.compile(r"(?:^|(?<=\s))([A-Za-z][\w.\-]*)=")
 MAX_LINE = 16384
 
 
+# Like _KEY, but a key may also follow "|" (the start of a CEF extension).
+_SHAPE_KEY = re.compile(r"(?:^|(?<=[\s|]))([A-Za-z][\w.\-]*)=")
+
+
+def shape(raw, limit=400):
+    """The layout of a record with every value masked: keys (a word followed by "=", at the start or after
+    whitespace or "|") are kept, every other word, number, address and name becomes "x", separators are kept.
+    The value of a CEF "...Label" key is kept too: it names a field (cs1Label=Auth.Username), it is not data.
+    Safe to log: it shows the format of a record without any username, MAC, address or SSID in it."""
+    s = raw[:limit]
+    keys = {m.start(): m for m in _SHAPE_KEY.finditer(s)}
+    out, i, keep = [], 0, False
+    for m in re.finditer(r"[\w.:@\/+\-]+", s):
+        if m.start() < i:
+            continue                                 # inside a key already emitted
+        out.append(s[i:m.start()])
+        key = keys.get(m.start())
+        if key is not None:
+            out.append(key.group(0))                 # "name=" stays
+            keep = key.group(1).lower().endswith("label")
+            i = key.end()
+        elif keep:
+            out.append(m.group(0))                   # a label's value
+            keep, i = False, m.end()
+        else:
+            out.append("x")
+            i = m.end()
+    out.append(s[i:])
+    return re.sub(r"x(?:x)+", "x", "".join(out))
+
+
 def _norm_key(k):
     return re.sub(r"[^a-z0-9]", "", k.lower())
 
@@ -140,6 +171,8 @@ class ClearPassTracker:
         self._fails = collections.deque(maxlen=MAX_EVENTS)      # (ts, user, mac, reason, platform) PantherNet rejects
         self._mc_ok = {}                                       # user -> [ts] MiddleburyCollege accepts, any platform
         self.received = self.unmapped = self.dropped = self.unclassified = 0
+        self._dropped_by = collections.Counter()           # source address -> records dropped (bounded)
+        self._last_unmapped_raw = ""                       # memory only; shown only as a masked layout
         self._last_event = 0
         self._field_names = collections.Counter()
         self._cache = (0, None)
@@ -167,6 +200,7 @@ class ClearPassTracker:
                 rec = extract(fields)
                 if rec is None or not rec["ssid"] or not (rec["user"] or rec["mac"]):
                     self.unmapped += 1
+                    self._last_unmapped_raw = raw[:MAX_LINE]
                     return False
                 self.received += 1
                 self._last_event = now
@@ -180,9 +214,21 @@ class ClearPassTracker:
                 self.unmapped += 1
             return False
 
-    def count_dropped(self):
+    def count_dropped(self, ip=""):
         with self._lock:
             self.dropped += 1
+            if ip:
+                self._dropped_by[ip if (ip in self._dropped_by or len(self._dropped_by) < 50) else "(others)"] += 1
+
+    def dropped_sources(self, top=8):
+        """[(source address, records dropped)], busiest first. Addresses only, never any content."""
+        with self._lock:
+            return self._dropped_by.most_common(top)
+
+    def unmapped_layout(self):
+        """Value-masked layout of the most recent record that could not be used ('' if none)."""
+        with self._lock:
+            return shape(self._last_unmapped_raw) if self._last_unmapped_raw else ""
 
     def _record(self, rec, now):
         ssid, user, mac = rec["ssid"].lower(), rec["user"], rec["mac"]
@@ -215,7 +261,7 @@ class ClearPassTracker:
     def history_s(self):
         return self.clock() - self._started
 
-    def families(self, ttl=15):
+    def families(self, ttl=5):
         """Exported families, recomputed at most every `ttl` seconds."""
         now = self.clock()
         with self._lock:
