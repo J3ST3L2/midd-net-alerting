@@ -29,6 +29,7 @@ class Listener:
         self.tracker, self.allow, self.describe_every = tracker, allow, describe_every
         self.describe_first = describe_first
         self._last_names, self._last_unmapped, self._last_dropped = None, 0, None
+        self._last_values = None
         self._tcp_slots = threading.BoundedSemaphore(max_tcp)
         self._stop = threading.Event()
         self._started = False
@@ -111,6 +112,12 @@ class Listener:
                 lines.append("clearpass records not usable: %d so far; layout of the latest, values masked: %s"
                              % (unmapped, layout))
             self._last_unmapped = unmapped
+        services, ssids = self.tracker.top_values()
+        if (services or ssids) and (services, ssids) != self._last_values:
+            lines.append("clearpass service names seen: %s; SSIDs seen: %s" % (
+                ", ".join("%s=%d" % (n, c) for n, c in services) or "none",
+                ", ".join("%s=%d" % (n, c) for n, c in ssids) or "none"))
+            self._last_values = (services, ssids)
         dropped = self.tracker.dropped_sources()
         if dropped and dropped != self._last_dropped:
             lines.append("clearpass records dropped by source address: %s"

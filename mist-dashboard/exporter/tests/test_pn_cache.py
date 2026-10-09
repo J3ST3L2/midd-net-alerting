@@ -133,7 +133,7 @@ class Persistence(unittest.TestCase):
         pathlib.Path(short).write_text("tooshort")
         self.assertIsNone(open_cache(self.path, short)[1])
         good = os.path.join(self.dir.name, "good")
-        open(good, "w").write(KEY + "\n")
+        pathlib.Path(good).write_text(KEY + chr(10))
         self.assertIsNotNone(open_cache(self.path, good)[1])
 
     def test_a_broken_database_degrades_to_memory_and_never_crashes(self):

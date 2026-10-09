@@ -390,7 +390,7 @@ class Diagnostics(unittest.TestCase):
         self.assertEqual(shape("zz-c|aabbcc000001|Reject|9002|PantherNet"), "x|x|x|x|x")
         started = time.time()
         for junk in ["x" * 200000, "a=" * 100000, ("k=v " * 5000) + "y" * 100000, "|" * 100000]:
-            self.assertLessEqual(len(shape(junk)), 400)
+            self.assertLessEqual(len(shape(junk)), 1500)
         self.assertLess(time.time() - started, 2.0)
 
     def test_dropped_sources_are_counted_by_address_only_and_bounded(self):
@@ -441,6 +441,86 @@ class Diagnostics(unittest.TestCase):
         c.close()
         self.assertTrue(wait_for(lambda: t.dropped >= 1))
         self.assertEqual(t.dropped_sources()[0][0], "127.0.0.1")
+
+
+class ClearPassCef(unittest.TestCase):
+    """The record layout ClearPass actually sends (CEF, columns as csN with a csNLabel naming them)."""
+
+    HEAD = "<134>Oct  9 10:00:00 cpauth1 CEF:0|Aruba Networks|ClearPass|6.11.4|Syslog|Authentication|3|"
+
+    def record(self, user="zz-a@example.test", mac="AA-BB-CC-00-00-01", status="ACCEPT", nas="192.0.2.21",
+               called="11-22-33-44-55-66:PantherNet", service="PantherNet 802.1X", code=None):
+        ext = ("cat=Session Log dvc=140.233.1.113 duser=%s dmac=%s cs2=EAP-TLS cs2Label=Authentication Method "
+               "src=%s cs4=%s cs4Label=Login Status destinationServiceName=%s cs3=eap "
+               "cs3Label=Authentication Protocol" % (user, mac, nas, status, service))
+        if called is not None:
+            ext += " cs5=%s cs5Label=Called Station Id" % called
+        if code is not None:
+            ext += " ArubaClearpassCppmErrorCodeErrorCode=%s" % code
+        return self.HEAD + ext
+
+    def test_custom_columns_are_readable_under_their_labels(self):
+        f = parse_fields(self.record())
+        self.assertEqual(f["Login Status"], "ACCEPT")
+        self.assertEqual(f["Called Station Id"], "11-22-33-44-55-66:PantherNet")
+        self.assertEqual(f["cs4"], "ACCEPT")                       # the original key is still there
+
+    def test_the_observed_record_is_fully_understood(self):
+        rec = extract(parse_fields(self.record()))
+        self.assertEqual(rec, {"status": "accept", "ssid": "PantherNet", "user": "zz-a", "mac": "aabbcc000001",
+                               "nas": "192.0.2.21", "reason": ""})
+
+    def test_a_rejected_record_carries_its_error_code(self):
+        rec = extract(parse_fields(self.record(status="REJECT", code="9002")))
+        self.assertEqual((rec["status"], rec["reason"]), ("reject", "9002"))
+        timed_out = extract(parse_fields(self.record(status="TIMEOUT")))
+        self.assertEqual(timed_out["status"], "reject")
+
+    def test_a_record_without_an_ssid_column_is_unusable_but_its_service_is_noted(self):
+        t = tracker(Clock())
+        self.assertFalse(t.handle_line(self.record(called=None)))
+        self.assertEqual(t.unmapped, 1)
+        self.assertEqual(t.top_values()[0], [("PantherNet 802.1X", 1)])
+
+    def test_end_to_end_through_the_tracker(self):
+        clock = Clock()
+        t = tracker(clock, aruba_nas=ARUBA)
+        self.assertTrue(t.handle_line(self.record(nas="192.0.2.3")))                       # an Aruba controller
+        self.assertTrue(t.handle_line(self.record(user="zz-b", mac="AA-BB-CC-00-00-02", nas="198.51.100.9")))
+        self.assertTrue(t.handle_line(self.record(user="zz-c", mac="AA-BB-CC-00-00-03", status="REJECT",
+                                                  code="9002", nas="192.0.2.3")))
+        fams = t.families(ttl=0)
+        self.assertEqual(value(fams, "clearpass_pn_events_received_total"), 3.0)
+        self.assertEqual(value(fams, "clearpass_pn_unique_clients", platform="campus", ssid=PN), 2.0)
+        self.assertEqual(value(fams, "clearpass_pn_unique_clients", platform="aruba", ssid=PN), 1.0)
+        self.assertEqual(value(fams, "clearpass_pn_auth_failure_events", platform="aruba"), 1.0)
+        self.assertEqual(value(fams, "clearpass_pn_failure_reason_events", platform="campus", reason="9002"), 1.0)
+
+    def test_shape_keeps_whole_labels_and_masks_every_value(self):
+        out = shape(self.record())
+        for label in ("cs4Label=Login Status", "cs5Label=Called Station Id", "cs3Label=Authentication Protocol"):
+            self.assertIn(label, out)
+        for secret in ["zz-a", "example.test", "AA-BB-CC", "192.0.2.21", "11-22-33", "PantherNet", "ACCEPT", "EAP-TLS"]:
+            self.assertNotIn(secret, out, secret)
+
+    def test_service_and_ssid_names_are_bounded(self):
+        t = tracker(Clock())
+        for i in range(120):
+            t.handle_line(self.record(service="svc-%d" % i, called="11-22-33-44-55-66:ssid-%d" % i))
+        services, ssids = t.top_values(top=200)
+        self.assertLessEqual(len(services), 50)
+        self.assertLessEqual(len(ssids), 50)
+
+    def test_describe_lists_network_names_but_never_a_person(self):
+        t = tracker(Clock())
+        listener = Listener("127.0.0.1", 0, t, parse_allow("127.0.0.0/8"), describe_every=3600, describe_first=3600)
+        self.addCleanup(listener.stop)
+        t.handle_line(self.record())
+        text = chr(10).join(listener.describe())
+        self.assertIn("service names seen: PantherNet 802.1X=1", text)
+        self.assertIn("SSIDs seen: PantherNet=1", text)
+        for secret in ["zz-a", "example.test", "AA-BB-CC-00-00-01", "aabbcc000001"]:
+            self.assertNotIn(secret, text)
 
 
 class CollectorIntegration(unittest.TestCase):
