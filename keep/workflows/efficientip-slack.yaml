@@ -23,13 +23,16 @@ workflow:
             - key: slack_timestamp_efficientip_v1
               value: ""
           attachments:
-            - fallback: "{{ alert.fired_host }} RECOVERED • {{ alert.event }}"
+            - fallback: "{{ alert.fired_host }} - {{ alert.event }} • Resolved"
               color: "#39ff14"
-              author_name: "{{ alert.fired_host }} RECOVERED"
+              author_name: "{{ alert.fired_host }} - {{ alert.event }}"
               fields:
-                - title: Event
-                  value: "{{ alert.event }}"
-                  short: false
+                - title: Status
+                  value: "Resolved"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Details
                   value: "{{ alert.message }}"
                   short: false
@@ -41,9 +44,6 @@ workflow:
                   short: true
                 - title: Relay / IP
                   value: "{{ alert.fired_ip }}"
-                  short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
                   short: true
                 - title: Recovered
                   value: "{{ alert.lastReceived }}"
@@ -69,13 +69,16 @@ workflow:
             - key: fired_message
               value: "{{ alert.message }}"
           attachments:
-            - fallback: "{{ alert.hostname }} ALERT • {{ alert.event }}"
+            - fallback: "{{ alert.hostname }} - {{ alert.event }} • Ongoing"
               color: "#ff3131"
-              author_name: "{{ alert.hostname }} ALERT"
+              author_name: "{{ alert.hostname }} - {{ alert.event }}"
               fields:
-                - title: Event
-                  value: "{{ alert.event }}"
-                  short: false
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Details
                   value: "{{ alert.message }}"
                   short: false
@@ -84,9 +87,6 @@ workflow:
                   short: true
                 - title: Relay / IP
                   value: "{{ alert.ip }}"
-                  short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
                   short: true
                 - title: Started
                   value: "{{ alert.lastReceived }}"

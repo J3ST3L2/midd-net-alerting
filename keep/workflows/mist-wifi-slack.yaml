@@ -27,9 +27,12 @@ workflow:
               fields:
                 - title: Status
                   value: "Resolved"
-                  short: false
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
                 - title: Reason
-                  value: "{{ alert.labels.mist_reason }}"
+                  value: "{{ alert.labels.mist_reason_card }}"
                   short: false
                 - title: Site
                   value: "{{ alert.labels.mist_site_name }}"
@@ -48,9 +51,6 @@ workflow:
                   short: true
                 - title: Last seen by Mist
                   value: "{{ alert.labels.mist_last_seen }}"
-                  short: true
-                - title: State
-                  value: "{{ alert.labels.mist_state }}"
                   short: true
                 - title: Recovered
                   value: "{{ alert.lastReceived }}"
@@ -74,9 +74,12 @@ workflow:
               fields:
                 - title: Status
                   value: "Ongoing"
-                  short: false
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
                 - title: Reason
-                  value: "{{ alert.labels.mist_reason }}"
+                  value: "{{ alert.labels.mist_reason_card }}"
                   short: false
                 - title: Site
                   value: "{{ alert.labels.mist_site_name }}"
@@ -95,9 +98,6 @@ workflow:
                   short: true
                 - title: Last seen by Mist
                   value: "{{ alert.labels.mist_last_seen }}"
-                  short: true
-                - title: State
-                  value: "{{ alert.labels.mist_state }}"
                   short: true
                 - title: Started
                   value: "{{ alert.lastReceived }}"
@@ -119,9 +119,12 @@ workflow:
               fields:
                 - title: Status
                   value: "Ongoing"
-                  short: false
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
                 - title: Reason
-                  value: "{{ alert.labels.mist_reason }}"
+                  value: "{{ alert.labels.mist_reason_card }}"
                   short: false
                 - title: Site
                   value: "{{ alert.labels.mist_site_name }}"
@@ -140,9 +143,6 @@ workflow:
                   short: true
                 - title: Last seen by Mist
                   value: "{{ alert.labels.mist_last_seen }}"
-                  short: true
-                - title: State
-                  value: "{{ alert.labels.mist_state }}"
                   short: true
                 - title: Started
                   value: "{{ alert.lastReceived }}"

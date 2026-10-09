@@ -3,6 +3,8 @@ import json
 import urllib.error
 import urllib.request
 
+from .normalize import with_card_labels
+
 
 class KeepError(Exception):
     """permanent=True means the payload itself is bad (4xx other than auth/429)."""
@@ -24,7 +26,8 @@ class KeepClient:
         if self._key:   # optional: Keep on Gravitron runs NO_AUTH, so no key is normally needed
             headers["X-API-KEY"] = self._key
         req = urllib.request.Request(self.endpoint, method="POST",
-                                     data=json.dumps(payload).encode("utf-8"), headers=headers)
+                                     data=json.dumps(with_card_labels(payload)).encode("utf-8"),
+                                     headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 r.read()
