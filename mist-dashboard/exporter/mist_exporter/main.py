@@ -9,7 +9,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import config
 from .collector import Collector
 from .mist_api import MistClient
-from .syslog_listener import Listener, parse_allow
 
 
 class JsonFormatter(logging.Formatter):
@@ -69,14 +68,6 @@ def main(argv=None):
 
     collector = Collector(cfg, MistClient(cfg.mist_host, cfg.org_id, cfg.mist_token,
                                           cfg.page_limit, cfg.max_pages, cfg.timeout))
-    if cfg.clearpass_enabled:
-        try:
-            Listener(cfg.clearpass_host, cfg.clearpass_port, collector.clearpass,
-                     parse_allow(cfg.clearpass_allow)).start()
-            log.info("clearpass syslog listening on %s:%d (UDP and TCP), %d allowed networks",
-                     cfg.clearpass_host, cfg.clearpass_port, len(parse_allow(cfg.clearpass_allow)))
-        except (ValueError, OSError) as e:
-            sys.exit("ClearPass syslog listener not started: %s" % e)
     stop = threading.Event()
     threading.Thread(target=collector.run_forever, args=(stop,), daemon=True).start()
 

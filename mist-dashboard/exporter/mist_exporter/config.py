@@ -44,17 +44,6 @@ class Config:
     fallback_cache_path: str = "/state/pn-cache.sqlite3"
     fallback_cache_key_file: str = ""
     fallback_cache_ttl_h: int = 72
-    # ClearPass syslog feed for the Aruba side (see clearpass_pn.py). Off unless enabled, and it refuses
-    # to start without an allow-list of ClearPass source addresses.
-    clearpass_enabled: bool = False
-    clearpass_host: str = "0.0.0.0"
-    clearpass_port: int = 5514
-    clearpass_allow: str = ""
-    clearpass_min_history_h: int = 24       # event-based counts are withheld until this much has been received
-    clearpass_noise_codes: str = ""         # ClearPass error codes not counted as failures (comma separated)
-    # Aruba controller addresses or networks, matched against the NAS address on each record to split the
-    # campus-wide numbers into Aruba vs other (Mist) access points. Empty = campus-wide only.
-    clearpass_aruba_nas: str = ""
     pn_ssid: str = "PantherNet"
     mc_ssid: str = "MiddleburyCollege"
     mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
@@ -89,13 +78,6 @@ def load():
         fallback_cache_path=env("FALLBACK_CACHE_PATH", "/state/pn-cache.sqlite3").strip(),
         fallback_cache_key_file=env("PN_CACHE_KEY_FILE", "").strip(),
         fallback_cache_ttl_h=int(env("FALLBACK_CACHE_TTL_H", "72")),
-        clearpass_enabled=env("CLEARPASS_SYSLOG_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
-        clearpass_host=env("CLEARPASS_SYSLOG_HOST", "0.0.0.0").strip(),
-        clearpass_port=int(env("CLEARPASS_SYSLOG_PORT", "5514")),
-        clearpass_allow=env("CLEARPASS_ALLOW", "").strip(),
-        clearpass_min_history_h=int(env("CLEARPASS_MIN_HISTORY_H", "24")),
-        clearpass_noise_codes=env("CLEARPASS_NOISE_CODES", "").strip(),
-        clearpass_aruba_nas=env("CLEARPASS_ARUBA_NAS", "").strip(),
         pn_ssid=env("PN_SSID", "PantherNet").strip(),
         mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
         mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),
