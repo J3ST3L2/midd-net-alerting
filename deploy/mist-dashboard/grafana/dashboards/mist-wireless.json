@@ -748,27 +748,18 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unique client devices seen on each SSID in the last 24 hours. Devices, not people: a client using a different random MAC per SSID counts once on each. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "description": "Unique devices that connected to PantherNet in the last 24 hours.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "min": 0,
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
@@ -778,22 +769,23 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 4,
+        "w": 5,
         "x": 0,
         "y": 32
       },
       "id": 12,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "textMode": "value"
       },
       "targets": [
         {
@@ -801,79 +793,59 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_pn_unique_clients",
+          "expr": "sum(mist_pn_unique_clients{ssid=\"PantherNet\"})",
           "format": "time_series",
-          "legendFormat": "{{ssid}}",
+          "instant": true,
+          "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Unique clients: PantherNet vs MiddleburyCollege (24 h)",
-      "type": "timeseries"
+      "title": "Devices on PantherNet",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Failure events (left) and the unique users behind them (right). One failing device retries about six times, so events overstate the problem. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "description": "Of the devices on PantherNet or MiddleburyCollege in the last 24 hours, the percentage on PantherNet. This is the adoption number.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "min": 0,
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Unique users"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 4,
+        "w": 5,
+        "x": 5,
         "y": 32
       },
       "id": 13,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "textMode": "value"
       },
       "targets": [
         {
@@ -881,11 +853,65 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_pn_auth_failure_events",
+          "expr": "100 * sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) / (sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) + sum(mist_pn_unique_clients{ssid=\"MiddleburyCollege\"}))",
           "format": "time_series",
-          "legendFormat": "Failure events",
+          "instant": true,
+          "legendFormat": "",
           "refId": "A"
+        }
+      ],
+      "title": "PantherNet share",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Unique users with at least one failed PantherNet sign-in in the last 24 hours. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 10,
+        "y": 32
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
         {
           "datasource": {
             "type": "prometheus",
@@ -893,108 +919,40 @@
           },
           "expr": "mist_pn_auth_failure_clients",
           "format": "time_series",
-          "legendFormat": "Unique users",
-          "refId": "B"
-        }
-      ],
-      "title": "PantherNet auth failures (24 h)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 40
-      },
-      "id": 14,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "mist_pn_fallback_clients",
-          "format": "time_series",
-          "legendFormat": "{{match}}",
+          "instant": true,
+          "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Fallback to MiddleburyCollege: clients",
-      "type": "timeseries"
+      "title": "Users who failed to sign in",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Fallback clients divided by failing clients old enough to judge. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "description": "Of the failing users old enough to judge, the percentage who connected to MiddleburyCollege within 30 minutes of failing. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. Clients with no username are excluded.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "max": 1,
-          "min": 0,
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "red",
+                "value": 0.5
               }
             ]
           },
@@ -1003,12 +961,140 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 40
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 32
       },
       "id": 15,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_pn_fallback_rate{match=\"user\"}",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "...who then used MiddleburyCollege",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Failing users old enough (30+ minutes) to judge, whose MiddleburyCollege connections were checked: the base for the percentage beside it.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 32
+      },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(mist_pn_fallback_eligible_clients{match=\"user\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Users judged",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "How the adoption percentage moves. Read it as: a line going up means more devices are choosing PantherNet. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 17,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1026,13 +1112,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mist_pn_fallback_rate",
+          "expr": "100 * sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) / (sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) + sum(mist_pn_unique_clients{ssid=\"MiddleburyCollege\"}))",
           "format": "time_series",
-          "legendFormat": "{{match}}",
+          "legendFormat": "PantherNet share",
           "refId": "A"
         }
       ],
-      "title": "Fallback to MiddleburyCollege: share of failing clients",
+      "title": "PantherNet share of devices over time",
       "type": "timeseries"
     },
     {
@@ -1040,7 +1126,84 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "All PantherNet auth-failure events by reason. Only dot1x_failed and handshake_timeout are counted as failures; the rest are shown for context. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted.",
+      "description": "The upper line is people who could not sign in to PantherNet; the lower line is how many of them ended up on MiddleburyCollege instead. The gap is people who failed and did not connect, or connected after more than 30 minutes. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_pn_auth_failure_clients",
+          "format": "time_series",
+          "legendFormat": "Users who failed to sign in",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_pn_fallback_clients{match=\"user\"}",
+          "format": "time_series",
+          "legendFormat": "...of those, used MiddleburyCollege",
+          "refId": "B"
+        }
+      ],
+      "title": "Users who failed to sign in, and how many fell back",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Rejected PantherNet attempts in the last 24 hours by reason. Only the first two reasons count as failures; the rest are shown so you can see what is being ignored. These are attempts, not people, and one failing device retries many times.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1064,9 +1227,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 44
       },
-      "id": 16,
+      "id": 19,
       "options": {
         "displayMode": "gradient",
         "orientation": "horizontal",
@@ -1085,14 +1248,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(mist_pn_failure_reason_events)",
+          "expr": "sort_desc(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(mist_pn_failure_reason_events, \"reason\", \"Couldn't complete 802.1X sign-in\", \"reason\", \"dot1x_failed\"), \"reason\", \"Security handshake timed out\", \"reason\", \"handshake_timeout\"), \"reason\", \"Old session expired (not counted)\", \"reason\", \"previous_auth_invalid\"), \"reason\", \"Device walked away (not counted)\", \"reason\", \"client_left\"), \"reason\", \"Radio transmission problem (not counted)\", \"reason\", \"tx_failure\"), \"reason\", \"Other (not counted)\", \"reason\", \"other\"))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Why PantherNet auth fails (24 h)",
+      "title": "Why PantherNet sign-ins fail (24 h)",
       "type": "bargauge"
     },
     {
@@ -1100,7 +1263,73 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Seconds since the fallback data last refreshed from Mist.",
+      "description": "Of the users who failed to sign in to PantherNet (and are old enough to judge), the percentage who then connected to MiddleburyCollege. A line going down means fewer failures end up on the old network. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mist_pn_fallback_rate{match=\"user\"}",
+          "format": "time_series",
+          "legendFormat": "Fell back to MiddleburyCollege",
+          "refId": "A"
+        }
+      ],
+      "title": "Share of failing users who fell back",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Seconds since this data last refreshed from Mist.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1131,10 +1360,10 @@
       "gridPos": {
         "h": 4,
         "w": 6,
-        "x": 12,
-        "y": 48
+        "x": 0,
+        "y": 52
       },
-      "id": 17,
+      "id": 21,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -1168,7 +1397,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Loading until the last 24 hours and their username lookups are fetched (after a restart this takes a while). The failure and fallback counts are withheld until it reads Loaded, so a restart never draws a false dip in the trend.",
+      "description": "Loading until the last 24 hours and their username lookups are fetched (after a restart this takes hours). The failure and fallback numbers are blank until it reads Loaded, so a restart never draws a false dip in the trend.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1210,10 +1439,10 @@
       "gridPos": {
         "h": 4,
         "w": 6,
-        "x": 18,
-        "y": 48
+        "x": 6,
+        "y": 52
       },
-      "id": 18,
+      "id": 22,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -1247,7 +1476,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Devices and users still waiting for a Mist lookup. Drops to near zero once history is loaded.",
+      "description": "Devices and users still waiting for a Mist lookup. Near zero once History is Loaded.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1273,7 +1502,7 @@
         "x": 12,
         "y": 52
       },
-      "id": 19,
+      "id": 23,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -1307,7 +1536,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Failing users old enough to judge, whose MiddleburyCollege connections have been checked: the denominator of the fallback share.",
+      "description": "Counted failed sign-in attempts. Much larger than the number of users, because a device that cannot sign in keeps retrying.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1333,7 +1562,7 @@
         "x": 18,
         "y": 52
       },
-      "id": 20,
+      "id": 24,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -1352,14 +1581,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(mist_pn_fallback_eligible_clients{match=\"user\"})",
+          "expr": "mist_pn_auth_failure_events",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Judged clients",
+      "title": "Failed attempts (24 h)",
       "type": "stat"
     },
     {
@@ -1367,7 +1596,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Work still queued for Mist lookups: 'username' is failing devices whose user is not yet known, 'connections' is users whose MiddleburyCollege connections are not yet checked. A falling line means the history is loading (about 24 lookups a minute); a flat line means it is stalled. It rises briefly as usernames resolve, because each one adds a connections lookup.",
+      "description": "Only interesting while History says Loading. 'username' is failing devices whose user is not yet known, 'connections' is users whose MiddleburyCollege connections are not yet checked. A falling line means the history is loading; a flat line means it is stalled.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1402,7 +1631,7 @@
         "x": 0,
         "y": 56
       },
-      "id": 21,
+      "id": 25,
       "options": {
         "legend": {
           "displayMode": "list",

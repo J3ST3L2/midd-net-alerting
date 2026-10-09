@@ -218,7 +218,7 @@ PN_FAILURE_DEF = ("Counted failures are PantherNet auth-failure events with reas
                   "separately and not counted.")
 PN_FALLBACK_DEF = ("A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege "
                    "connection by the same username within 30 minutes. It is judged only after those 30 minutes "
-                   "have passed, so this lags by that long. 'device' also requires the same OS and model. "
+                   "have passed, so this lags by that long. "
                    "Clients with no username are excluded.")
 
 
@@ -232,60 +232,91 @@ def row(title, y):
             "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}}
 
 
+PN_REASON_NAMES = (
+    ("dot1x_failed", "Couldn't complete 802.1X sign-in"),
+    ("handshake_timeout", "Security handshake timed out"),
+    ("previous_auth_invalid", "Old session expired (not counted)"),
+    ("client_left", "Device walked away (not counted)"),
+    ("tx_failure", "Radio transmission problem (not counted)"),
+    ("other", "Other (not counted)"),
+)
+
+
+def _plain_reasons(expr):
+    """Rename the reason label values to readable text (the metric keeps the stable names)."""
+    for raw, text in PN_REASON_NAMES:
+        expr = 'label_replace(%s, "reason", "%s", "reason", "%s")' % (expr, text, raw)
+    return expr
+
+
 def pn_adoption(y):
-    """PantherNet adoption: who is on it, who fails to authenticate, who falls back to MiddleburyCollege."""
+    """PantherNet adoption: how many devices use it, who fails to sign in, who falls back to MiddleburyCollege."""
     top = y + 1
+    pn, mc = 'sum(mist_pn_unique_clients{ssid="PantherNet"})', 'sum(mist_pn_unique_clients{ssid="MiddleburyCollege"})'
+    share = "100 * %s / (%s + %s)" % (pn, pn, mc)
     p = [
         row("PantherNet adoption", y),
-        timeseries("Unique clients: PantherNet vs MiddleburyCollege (24 h)", 0, top, 12, 8,
-                   [target("mist_pn_unique_clients", "{{ssid}}")],
-                   "Unique client devices seen on each SSID in the last 24 hours. Devices, not people: a "
-                   "client using a different random MAC per SSID counts once on each."),
-        timeseries("PantherNet auth failures (24 h)", 12, top, 12, 8,
-                   [target("mist_pn_auth_failure_events", "Failure events"),
-                    target("mist_pn_auth_failure_clients", "Unique users", ref="B")],
-                   "Failure events (left) and the unique users behind them (right). One failing device "
-                   "retries about six times, so events overstate the problem. " + PN_FAILURE_DEF),
-        timeseries("Fallback to MiddleburyCollege: clients", 0, top + 8, 12, 8,
-                   [target("mist_pn_fallback_clients", "{{match}}")], PN_FALLBACK_DEF),
-        timeseries("Fallback to MiddleburyCollege: share of failing clients", 12, top + 8, 12, 8,
-                   [target("mist_pn_fallback_rate", "{{match}}")],
-                   "Fallback clients divided by failing clients old enough to judge. " + PN_FALLBACK_DEF,
-                   unit="percentunit", max_=1),
-        bargauge("Why PantherNet auth fails (24 h)", 0, top + 16, 12, 8,
-                 "sort_desc(mist_pn_failure_reason_events)", "{{reason}}",
-                 "All PantherNet auth-failure events by reason. Only dot1x_failed and handshake_timeout are "
-                 "counted as failures; the rest are shown for context. " + PN_FAILURE_DEF),
-        stat("Data age", 12, top + 16, 6, 'time() - mist_exporter_last_success_timestamp_seconds{source="fallback"}',
-             "Seconds since the fallback data last refreshed from Mist.", unit="s",
+
+        stat("Devices on PantherNet", 0, top, 5, pn,
+             "Unique devices that connected to PantherNet in the last 24 hours."),
+        stat("PantherNet share", 5, top, 5, share,
+             "Of the devices on PantherNet or MiddleburyCollege in the last 24 hours, the percentage on "
+             "PantherNet. This is the adoption number.", unit="percent"),
+        stat("Users who failed to sign in", 10, top, 5, "mist_pn_auth_failure_clients",
+             "Unique users with at least one failed PantherNet sign-in in the last 24 hours. " + PN_FAILURE_DEF,
+             thresholds=steps((GREEN, None), (AMBER, 1))),
+        stat("...who then used MiddleburyCollege", 15, top, 5, 'mist_pn_fallback_rate{match="user"}',
+             "Of the failing users old enough to judge, the percentage who connected to MiddleburyCollege "
+             "within 30 minutes of failing. " + PN_FALLBACK_DEF, unit="percentunit",
+             thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5))),
+        stat("Users judged", 20, top, 4, 'sum(mist_pn_fallback_eligible_clients{match="user"})',
+             "Failing users old enough (30+ minutes) to judge, whose MiddleburyCollege connections were checked: "
+             "the base for the percentage beside it."),
+
+        timeseries("PantherNet share of devices over time", 0, top + 4, 12, 8,
+                   [target(share, "PantherNet share")],
+                   "How the adoption percentage moves. Read it as: a line going up means more devices are choosing "
+                   "PantherNet. " + PN_TREND_NOTE, unit="percent", min_=None),
+        timeseries("Users who failed to sign in, and how many fell back", 12, top + 4, 12, 8,
+                   [target("mist_pn_auth_failure_clients", "Users who failed to sign in"),
+                    target('mist_pn_fallback_clients{match="user"}', "...of those, used MiddleburyCollege", ref="B")],
+                   "The upper line is people who could not sign in to PantherNet; the lower line is how many of "
+                   "them ended up on MiddleburyCollege instead. The gap is people who failed and did not "
+                   "connect, or connected after more than 30 minutes. " + PN_TREND_NOTE),
+
+        bargauge("Why PantherNet sign-ins fail (24 h)", 0, top + 12, 12, 8,
+                 "sort_desc(%s)" % _plain_reasons("mist_pn_failure_reason_events"), "{{reason}}",
+                 "Rejected PantherNet attempts in the last 24 hours by reason. Only the first two reasons "
+                 "count as failures; the rest are shown so you can see what is being ignored. These are "
+                 "attempts, not people, and one failing device retries many times."),
+        timeseries("Share of failing users who fell back", 12, top + 12, 12, 8,
+                   [target('mist_pn_fallback_rate{match="user"}', "Fell back to MiddleburyCollege")],
+                   "Of the users who failed to sign in to PantherNet (and are old enough to judge), the percentage "
+                   "who then connected to MiddleburyCollege. A line going down means fewer failures end up on the "
+                   "old network. " + PN_TREND_NOTE, unit="percentunit", min_=None),
+
+        stat("Data age", 0, top + 20, 6, 'time() - mist_exporter_last_success_timestamp_seconds{source="fallback"}',
+             "Seconds since this data last refreshed from Mist.", unit="s",
              thresholds=steps((GREEN, None), (AMBER, 600), (RED, 1800)), color_mode="background"),
-        stat("History", 18, top + 16, 6, "mist_pn_backfill_complete",
+        stat("History", 6, top + 20, 6, "mist_pn_backfill_complete",
              "Loading until the last 24 hours and their username lookups are fetched (after a restart this takes "
-             "a while). The failure and fallback counts are withheld until it reads Loaded, so a restart "
-             "never draws a false dip in the trend.",
+             "hours). The failure and fallback numbers are blank until it reads Loaded, so a restart never "
+             "draws a false dip in the trend.",
              mappings=[{"type": "value", "options": {"1": {"text": "Loaded", "color": GREEN},
                                                       "0": {"text": "Loading", "color": AMBER}}}],
              thresholds=steps((AMBER, None), (GREEN, 1)), color_mode="background"),
         stat("Lookups pending", 12, top + 20, 6, "sum(mist_pn_lookups_pending)",
-             "Devices and users still waiting for a Mist lookup. Drops to near zero once history is loaded."),
-        stat("Judged clients", 18, top + 20, 6, 'sum(mist_pn_fallback_eligible_clients{match="user"})',
-             "Failing users old enough to judge, whose MiddleburyCollege connections have been checked: the "
-             "denominator of the fallback share."),
+             "Devices and users still waiting for a Mist lookup. Near zero once History is Loaded."),
+        stat("Failed attempts (24 h)", 18, top + 20, 6, "mist_pn_auth_failure_events",
+             "Counted failed sign-in attempts. Much larger than the number of users, because a device that "
+             "cannot sign in keeps retrying."),
     ]
-    for panel_ in p:
-        if panel_["type"] == "timeseries":
-            panel_["description"] = (panel_["description"] + " " + PN_TREND_NOTE).strip()
-    overrides = p[2]["fieldConfig"]["overrides"]
-    overrides.append({"matcher": {"id": "byName", "options": "Unique users"},
-                      "properties": [{"id": "custom.axisPlacement", "value": "right"}]})
     # Added after the trend note is applied: this one is progress, not a trailing-24-hour value.
     p.append(timeseries("Lookups pending over time", 0, top + 24, 24, 6,
                         [target("sum by (stage) (mist_pn_lookups_pending)", "{{stage}}")],
-                        "Work still queued for Mist lookups: 'username' is failing devices whose user is not yet "
-                        "known, 'connections' is users whose MiddleburyCollege connections are not yet checked. "
-                        "A falling line means the history is loading (about 24 lookups a minute); a flat line "
-                        "means it is stalled. It rises briefly as usernames resolve, because each one adds a "
-                        "connections lookup."))
+                        "Only interesting while History says Loading. 'username' is failing devices whose user is "
+                        "not yet known, 'connections' is users whose MiddleburyCollege connections are not yet "
+                        "checked. A falling line means the history is loading; a flat line means it is stalled."))
     return p
 
 

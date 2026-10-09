@@ -89,9 +89,25 @@ class Dashboards(unittest.TestCase):
         self.assertEqual(dash["time"]["from"], "now-7d")
         for p in dash["panels"]:
             self.assertNotIn("timeFrom", p, p["title"])         # no panel pins its own range
-        charts = [p for p in dash["panels"] if p["type"] == "timeseries" and
-                  ("PantherNet" in p["title"] or "Fallback" in p["title"])]
-        self.assertGreaterEqual(len(charts), 4)
+        row_y = next(p["gridPos"]["y"] for p in dash["panels"] if p["title"] == "PantherNet adoption")
+        charts = [p for p in dash["panels"] if p["type"] == "timeseries" and p["gridPos"]["y"] > row_y]
+        self.assertGreaterEqual(len(charts), 3)
+
+    def test_pantherNet_row_is_plain_language(self):
+        dash = build.build()["mist-wireless.json"]
+        row_y = next(p["gridPos"]["y"] for p in dash["panels"] if p["title"] == "PantherNet adoption")
+        panels = [p for p in dash["panels"] if p["gridPos"]["y"] > row_y]
+        text = " ".join(p["title"] + " " + p.get("description", "") for p in panels)
+        for jargon in ("match", "dot1x_failed", "eligible", "judged clients"):
+            self.assertNotIn(jargon, text.lower(), jargon)
+        # reasons are shown with readable names, and every chart explains itself
+        reasons = next(p for p in panels if p["title"].startswith("Why PantherNet"))
+        self.assertIn("Couldn't complete 802.1X sign-in", reasons["targets"][0]["expr"])
+        for p in panels:
+            if p["type"] == "timeseries":
+                self.assertGreater(len(p["description"]), 40, p["title"])
+        # the old dual-axis chart and the always-zero device series are gone
+        self.assertFalse(any('match="device"' in t["expr"] for p in panels for t in p["targets"]))
         # the other dashboards keep the usual 6 hour default
         others = [d["time"]["from"] for n, d in build.build().items() if n != "mist-wireless.json"]
         self.assertEqual(set(others), {"now-6h"})
