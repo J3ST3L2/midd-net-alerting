@@ -82,6 +82,26 @@ When Cloudflare Tunnel is added: point a hostname at `http://127.0.0.1:3000`, se
 `sudo docker compose up -d`. Put it behind Cloudflare Access; Grafana's own login stays as a
 second layer.
 
+## Sharing dashboards without logins
+
+Grafana's *Share > Share externally* makes a dashboard viewable by anyone holding its link (view only, no other
+dashboards, no queries beyond that dashboard's panels). To keep those links off `keep.middlebury.edu`, they are
+served from their own name:
+
+1. **Certificate.** Issue `gravitron.middlebury.edu` the same way as keep's (acme-dns) and place
+   `fullchain.pem` and `privkey.pem` in `/etc/nginx/ssl/gravitron/`.
+2. **nginx.** Copy `nginx/gravitron-shared.conf` to `/etc/nginx/conf.d/` (a whole `server` listening on 443 only;
+   the existing port-80 server for this name is untouched) and re-include `nginx/mist-dashboard.conf` in the keep
+   server, which now returns 404 for public-dashboard paths. Then `sudo nginx -t && sudo systemctl reload nginx`.
+3. **Share.** On a dashboard choose *Share > Share externally > Anyone with the link*. Grafana shows the link on
+   the keep name (`GRAFANA_ROOT_URL`); replace the host with `gravitron.middlebury.edu`:
+   `https://gravitron.middlebury.edu/mist-dashboard/public-dashboards/<token>`.
+
+Good candidates are the dashboards with no drop-downs or drill-downs (*PantherNet Adoption*, *Aruba Wireless*);
+public dashboards do not support Grafana variables, so the Site and Device links on the others do not work there.
+*Pause access* on the Shared dashboards page (Dashboards > Shared dashboards) cuts a link at once. The sharing
+settings live in Grafana's data volume, not in Git, so redo them after rebuilding that volume.
+
 ## Operate
 
 | Task | Command |
