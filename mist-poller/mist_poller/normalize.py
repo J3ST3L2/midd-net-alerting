@@ -140,6 +140,36 @@ def reason(alarm, event_type):
     return DEFAULT_REASONS.get(event_type, "")
 
 
+_CODE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+
+
+def card_reason(text):
+    """Break a structured Mist reason (CODE: TYPE: detail) into stacked lines for the Slack card.
+
+    Switch alarms arrive as e.g. "L2CPD_RECEIVE_BPDU_BLOCK_ENABLED: BPDU_PROTECT: Interface
+    mge-0/0/18 is DOWN: BPDU error detected". Anything that does not start with an UPPER_CASE
+    code is plain English already and is returned unchanged.
+    """
+    text = (text or "").strip()
+    parts = text.split(": ")
+    if len(parts) < 2 or not _CODE.match(parts[0]):
+        return text
+    lines = ["Code: " + parts[0]]
+    rest = parts[1:]
+    if len(rest) > 1 and _CODE.match(rest[0]):
+        lines.append("Type: " + rest[0])
+        rest = rest[1:]
+    lines.append("Detail: " + ": ".join(rest))
+    return "\n".join(lines)
+
+
+def with_card_labels(payload):
+    """Return a copy of the Keep payload with the label the Slack cards render."""
+    labels = dict(payload.get("labels") or {})
+    labels["mist_reason_card"] = card_reason(labels.get("mist_reason", "")) or "n/a"
+    return dict(payload, labels=labels)
+
+
 def category(event_type, alarm):
     if event_type in INFRA_TYPES:
         return "infra"

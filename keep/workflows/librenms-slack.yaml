@@ -23,15 +23,18 @@ workflow:
             - key: slack_timestamp_net_v2
               value: ""
           attachments:
-            - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Resolved"
               color: "#39ff14"
-              author_name: "{{ alert.device }} RECOVERED"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
               fields:
-                - title: Issue
-                  value: "{{ alert.rule }}"
-                  short: false
+                - title: Status
+                  value: "Resolved"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Reason
                   value: "{{ alert.fired_reason }}"
                   short: false
@@ -61,15 +64,18 @@ workflow:
             - key: slack_timestamp_nms_v2
               value: ""
           attachments:
-            - fallback: "{{ alert.device }} RECOVERED • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Resolved"
               color: "#39ff14"
-              author_name: "{{ alert.device }} RECOVERED"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
               fields:
-                - title: Issue
-                  value: "{{ alert.rule }}"
-                  short: false
+                - title: Status
+                  value: "Resolved"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Reason
                   value: "{{ alert.fired_reason }}"
                   short: false
@@ -100,15 +106,18 @@ workflow:
             - key: fired_reason
               value: "{{ alert.reason }}"
           attachments:
-            - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
               color: "#ff3131"
-              author_name: "{{ alert.device }} DOWN"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
               fields:
-                - title: Issue
-                  value: "{{ alert.rule }}"
-                  short: false
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Reason
                   value: "{{ alert.reason }}"
                   short: false
@@ -139,15 +148,18 @@ workflow:
             - key: fired_reason
               value: "{{ alert.reason }}"
           attachments:
-            - fallback: "{{ alert.device }} DOWN • {{ alert.rule }}"
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
               color: "#ff3131"
-              author_name: "{{ alert.device }} DOWN"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
               fields:
-                - title: Issue
-                  value: "{{ alert.rule }}"
-                  short: false
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: Severity
+                  value: "{{ alert.severity }}"
+                  short: true
                 - title: Reason
                   value: "{{ alert.reason }}"
                   short: false
