@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "PantherNet adoption on Aruba APs, from ClearPass, beside Mist and combined.",
+  "description": "PantherNet adoption across the whole campus from ClearPass, split by Aruba and Mist access points.",
   "editable": false,
   "graphTooltip": 1,
   "links": [
@@ -23,7 +23,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "PantherNet's share of unique clients on PantherNet + MiddleburyCollege, on Juniper Mist APs (24 h).",
+      "description": "Of the devices that signed in to PantherNet or MiddleburyCollege in the last 24 hours, the percentage on PantherNet, across every access point. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -45,7 +45,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -68,14 +68,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * mist_pn_unique_clients{ssid=\"PantherNet\"} / sum(mist_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"})",
+          "expr": "100 * clearpass_pn_unique_clients{platform=\"campus\",ssid=\"PantherNet\"} / sum(clearpass_pn_unique_clients{platform=\"campus\",ssid=~\"PantherNet|MiddleburyCollege\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "PantherNet share: Mist",
+      "title": "PantherNet share: whole campus",
       "type": "stat"
     },
     {
@@ -83,7 +83,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "The same share on Aruba APs (24 h). From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of records have been received, because there is no history to backfill; after an exporter restart the Aruba charts show a gap, not a false dip.",
+      "description": "The same share, only for sign-ins that came through an Aruba controller. The split needs the Aruba controller addresses in CLEARPASS_ARUBA_NAS; without them only the campus-wide figure exists.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -105,8 +105,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 5,
+        "w": 6,
+        "x": 6,
         "y": 0
       },
       "id": 2,
@@ -128,14 +128,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * aruba_pn_unique_clients{ssid=\"PantherNet\"} / sum(aruba_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"})",
+          "expr": "100 * clearpass_pn_unique_clients{platform=\"aruba\",ssid=\"PantherNet\"} / sum(clearpass_pn_unique_clients{platform=\"aruba\",ssid=~\"PantherNet|MiddleburyCollege\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "PantherNet share: Aruba",
+      "title": "...on Aruba access points",
       "type": "stat"
     },
     {
@@ -143,7 +143,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Both systems combined. A device seen on both is counted once per system, so this is approximate. Blank until the Aruba feed has a full 24 hours.",
+      "description": "The same share, for every sign-in that did not come through an Aruba controller (the Mist access points). The split needs the Aruba controller addresses in CLEARPASS_ARUBA_NAS; without them only the campus-wide figure exists.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -165,8 +165,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 10,
+        "w": 6,
+        "x": 12,
         "y": 0
       },
       "id": 3,
@@ -188,14 +188,206 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * (sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) + sum(aruba_pn_unique_clients{ssid=\"PantherNet\"})) / (sum(mist_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"}) + sum(aruba_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"}))",
+          "expr": "100 * clearpass_pn_unique_clients{platform=\"other\",ssid=\"PantherNet\"} / sum(clearpass_pn_unique_clients{platform=\"other\",ssid=~\"PantherNet|MiddleburyCollege\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "PantherNet share: campus",
+      "title": "...on Mist access points",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "The same share as the Mist API reports it for Mist access points. It should be close to the ClearPass figure beside it for Mist; a big gap means one of the two feeds is incomplete.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum(mist_pn_unique_clients{ssid=\"PantherNet\"}) / sum(mist_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Cross-check: Mist's own count",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Unique users with at least one failed PantherNet sign-in in the last 24 hours, across the campus. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clearpass_pn_auth_failure_clients{platform=\"campus\"}",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Users who failed to sign in",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Of the failing users old enough to judge, the percentage who signed in to MiddleburyCollege within 30 minutes of failing. Judged only after those 30 minutes, so it lags by that long. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clearpass_pn_fallback_rate{platform=\"campus\"}",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "...who then used MiddleburyCollege",
       "type": "stat"
     },
     {
@@ -233,11 +425,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 15,
-        "y": 0
+        "w": 6,
+        "x": 12,
+        "y": 4
       },
-      "id": 4,
+      "id": 7,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -256,7 +448,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "time() - aruba_pn_last_event_timestamp_seconds",
+          "expr": "time() - clearpass_pn_last_event_timestamp_seconds",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -271,7 +463,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Collecting until 24 hours of ClearPass records have arrived; the counts below stay blank until then.",
+      "description": "Collecting until 24 hours of ClearPass records have arrived; the counts stay blank until then.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -312,11 +504,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 0
+        "w": 6,
+        "x": 18,
+        "y": 4
       },
-      "id": 5,
+      "id": 8,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -335,7 +527,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "aruba_pn_history_complete",
+          "expr": "clearpass_pn_history_complete",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -350,7 +542,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unique client devices with a successful authentication in the last 24 hours. Devices, not people. From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of records have been received, because there is no history to backfill; after an exporter restart the Aruba charts show a gap, not a false dip.",
+      "description": "The adoption percentage over time: 'campus' is everything, 'aruba' and 'other' (Mist) split it by access-point type. A line going up means more devices are choosing PantherNet. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -365,7 +557,6 @@
               "mode": "none"
             }
           },
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -375,7 +566,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -383,219 +574,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "aruba_pn_unique_clients",
-          "format": "time_series",
-          "legendFormat": "{{ssid}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Unique clients: PantherNet vs MiddleburyCollege (Aruba, 24 h)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Rejected PantherNet authentications (left) and the unique users behind them (right). A failing client retries, so events overstate the problem. From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of records have been received, because there is no history to backfill; after an exporter restart the Aruba charts show a gap, not a false dip.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 4
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "aruba_pn_auth_failure_events",
-          "format": "time_series",
-          "legendFormat": "Failure events",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "aruba_pn_auth_failure_clients",
-          "format": "time_series",
-          "legendFormat": "Unique users",
-          "refId": "B"
-        }
-      ],
-      "title": "PantherNet auth failures (Aruba, 24 h)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. Clients with no username are excluded. From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of records have been received, because there is no history to backfill; after an exporter restart the Aruba charts show a gap, not a false dip.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 12
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "aruba_pn_fallback_clients",
-          "format": "time_series",
-          "legendFormat": "{{match}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Fallback to MiddleburyCollege: clients (Aruba)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Fallback clients divided by failing clients old enough to judge. From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of records have been received, because there is no history to backfill; after an exporter restart the Aruba charts show a gap, not a false dip.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "fillOpacity": 8,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            }
-          },
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 12
+        "y": 8
       },
       "id": 9,
       "options": {
@@ -615,13 +594,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "aruba_pn_fallback_rate",
+          "expr": "100 * sum by (platform) (clearpass_pn_unique_clients{ssid=\"PantherNet\"}) / sum by (platform) (clearpass_pn_unique_clients{ssid=~\"PantherNet|MiddleburyCollege\"})",
           "format": "time_series",
-          "legendFormat": "{{match}}",
+          "legendFormat": "{{platform}}",
           "refId": "A"
         }
       ],
-      "title": "Fallback to MiddleburyCollege: share of failing clients (Aruba)",
+      "title": "PantherNet share of devices over time",
       "type": "timeseries"
     },
     {
@@ -629,7 +608,84 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "PantherNet rejects by ClearPass error code (top 12; the rest are 'other'). Look the codes up in ClearPass; once you know which are noise, list them in CLEARPASS_NOISE_CODES.",
+      "description": "The upper line is people who could not sign in to PantherNet; the lower line is how many of them ended up on MiddleburyCollege. The gap is people who failed and did not connect, or connected after more than 30 minutes. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clearpass_pn_auth_failure_clients{platform=\"campus\"}",
+          "format": "time_series",
+          "legendFormat": "Users who failed to sign in",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clearpass_pn_fallback_clients{platform=\"campus\"}",
+          "format": "time_series",
+          "legendFormat": "...of those, used MiddleburyCollege",
+          "refId": "B"
+        }
+      ],
+      "title": "Users who failed to sign in, and how many fell back",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Rejected PantherNet attempts in the last 24 hours by ClearPass error code (top 12; the rest are 'other'). Look the codes up in ClearPass; once you know which are noise, list them in CLEARPASS_NOISE_CODES so they stop counting as failures.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -653,9 +709,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 16
       },
-      "id": 10,
+      "id": 11,
       "options": {
         "displayMode": "gradient",
         "orientation": "horizontal",
@@ -674,15 +730,82 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(aruba_pn_failure_reason_events)",
+          "expr": "sort_desc(clearpass_pn_failure_reason_events{platform=\"campus\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "ClearPass error {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Why PantherNet auth fails (Aruba, 24 h)",
+      "title": "Why PantherNet sign-ins fail (24 h)",
       "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Where the failing users are: on Aruba access points or on the others (Mist). The split needs the Aruba controller addresses in CLEARPASS_ARUBA_NAS; without them only the campus-wide figure exists. From ClearPass authentication records, which cover Mist and Aruba access points alike. The counts are blank until 24 hours of records have been received (ClearPass cannot replay history), so after an exporter restart the charts show a gap, not a false dip.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clearpass_pn_auth_failure_clients{platform=~\"aruba|other\"}",
+          "format": "time_series",
+          "legendFormat": "{{platform}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Users failing to sign in, by access-point type",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -711,11 +834,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 20
+        "w": 5,
+        "x": 0,
+        "y": 24
       },
-      "id": 11,
+      "id": 13,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -734,7 +857,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "60 * rate(aruba_pn_events_received_total[5m])",
+          "expr": "60 * rate(clearpass_pn_events_received_total[5m])",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -749,7 +872,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Failing users old enough to judge: the denominator of the fallback share.",
+      "description": "Failing users old enough to judge: the base for the percentage above.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -771,11 +894,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 20
+        "w": 5,
+        "x": 5,
+        "y": 24
       },
-      "id": 12,
+      "id": 14,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -794,14 +917,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(aruba_pn_fallback_eligible_clients{match=\"user\"})",
+          "expr": "clearpass_pn_fallback_eligible_clients{platform=\"campus\"}",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Judged clients",
+      "title": "Users judged",
       "type": "stat"
     },
     {
@@ -835,11 +958,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 24
       },
-      "id": 13,
+      "id": 15,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -858,7 +981,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(aruba_pn_unmapped_events_total[1h])",
+          "expr": "increase(clearpass_pn_unmapped_events_total[1h])",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -866,6 +989,70 @@
         }
       ],
       "title": "Unusable records (1 h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Records with no NAS address, so they cannot be called Aruba or Mist. They still count toward the campus figures. Only meaningful once CLEARPASS_ARUBA_NAS is set.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 24
+      },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(clearpass_pn_unclassified_events_total[1h])",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "No NAS address (1 h)",
       "type": "stat"
     },
     {
@@ -899,11 +1086,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 20,
         "y": 24
       },
-      "id": 14,
+      "id": 17,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -922,7 +1109,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(aruba_pn_dropped_events_total[1h])",
+          "expr": "increase(clearpass_pn_dropped_events_total[1h])",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -937,7 +1124,7 @@
   "schemaVersion": 39,
   "tags": [
     "mist",
-    "aruba"
+    "clearpass"
   ],
   "templating": {
     "list": []
@@ -947,7 +1134,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Aruba PantherNet",
-  "uid": "aruba-pn",
+  "title": "PantherNet (ClearPass)",
+  "uid": "clearpass-pn",
   "version": 1
 }

@@ -1,4 +1,5 @@
 import os
+import pathlib
 import sqlite3
 import sys
 import tempfile
@@ -78,7 +79,7 @@ class Persistence(unittest.TestCase):
 
     def test_the_database_file_never_contains_a_username_or_mac(self):
         self.first_run()
-        raw = open(self.path, "rb").read().lower()
+        raw = pathlib.Path(self.path).read_bytes().lower()
         for secret in NAMES + MACS + ["example.test", "iphone", "pixel"]:
             if secret in ("iphone", "pixel"):
                 continue                      # os/model are device facts, not identifiers; skipped on purpose
@@ -129,7 +130,7 @@ class Persistence(unittest.TestCase):
         self.assertIsNone(store)
         self.assertFalse(os.path.exists(self.path))
         short = os.path.join(self.dir.name, "short")
-        open(short, "w").write("tooshort")
+        pathlib.Path(short).write_text("tooshort")
         self.assertIsNone(open_cache(self.path, short)[1])
         good = os.path.join(self.dir.name, "good")
         open(good, "w").write(KEY + "\n")
@@ -147,13 +148,13 @@ class Persistence(unittest.TestCase):
         with open(self.path, "wb") as f:
             f.write(b"this is not a sqlite database" * 50)
         key_file = os.path.join(self.dir.name, "key")
-        open(key_file, "w").write(KEY)
+        pathlib.Path(key_file).write_text(KEY)
         hasher, store = open_cache(self.path, key_file)
         self.assertIsNone(store)                                   # logged and carried on in memory
 
     def test_collector_wires_the_cache_from_config(self):
         key_file = os.path.join(self.dir.name, "key")
-        open(key_file, "w").write(KEY)
+        pathlib.Path(key_file).write_text(KEY)
         config = Config(fallback_cache_path=self.path, fallback_cache_key_file=key_file)
         c = Collector(config, object(), clock=lambda: float(NOW))
         self.assertIsNotNone(c._fallback._store)

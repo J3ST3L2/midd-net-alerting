@@ -9,6 +9,7 @@ import threading
 import time
 
 from . import clearpass_pn, pn_fallback
+from .syslog_listener import parse_allow
 from .metrics import Family, alarm_families, device_families, render, site_ap_families, sle_families, wireless_families
 from .mist_api import MistError
 
@@ -36,7 +37,8 @@ class Collector:
         self.clearpass = clearpass_pn.ClearPassTracker(
             cfg.pn_ssid, cfg.mc_ssid, cfg.fallback_window_s, cfg.fallback_lookback_h * 3600,
             cfg.clearpass_min_history_h * 3600,
-            [c.strip() for c in cfg.clearpass_noise_codes.split(",") if c.strip()], clock)
+            [c.strip() for c in cfg.clearpass_noise_codes.split(",") if c.strip()],
+            parse_allow(cfg.clearpass_aruba_nas), clock)
         if not cfg.fallback_enabled:
             self._due["fallback"] = float("inf")
 

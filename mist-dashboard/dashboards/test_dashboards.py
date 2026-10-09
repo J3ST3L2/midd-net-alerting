@@ -46,7 +46,7 @@ class Dashboards(unittest.TestCase):
             exprs = [t["expr"] for p in d["panels"] for t in p.get("targets", [])]
             exprs += [v["query"]["query"] for v in d["templating"]["list"]]
             for e in exprs:
-                for metric in re.findall(r"\b(?:mist|aruba)_[a-z_]+\b", e):
+                for metric in re.findall(r"\b(?:mist|clearpass)_[a-z_]+\b", e):
                     self.assertIn(metric, known, "%s queries unknown metric %s" % (name, metric))
 
     def test_structure(self):
@@ -94,7 +94,7 @@ class Dashboards(unittest.TestCase):
         self.assertGreaterEqual(len(charts), 4)
         # the other dashboards keep the usual 6 hour default
         others = [d["time"]["from"] for n, d in build.build().items()
-                  if n not in ("mist-wireless.json", "aruba-pn.json")]
+                  if n not in ("mist-wireless.json", "clearpass-pn.json")]
         self.assertEqual(set(others), {"now-6h"})
 
     def test_no_panel_overlap(self):
