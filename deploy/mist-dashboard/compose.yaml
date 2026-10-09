@@ -42,6 +42,9 @@ services:
       ARUBA_USER: ${ARUBA_USER:-grafana-ro}
       ARUBA_PASSWORD_FILE: /run/secrets/aruba_password
       ARUBA_INTERVAL_S: ${ARUBA_INTERVAL_S:-120}
+      # VLANs the PantherNet SSID puts BYOD and managed devices on (Mist buildings); blank = no split
+      PN_BYOD_VLANS: ${PN_BYOD_VLANS:-}
+      PN_MANAGED_VLANS: ${PN_MANAGED_VLANS:-}
     secrets:
       - mist_api_token
       - pn_cache_key

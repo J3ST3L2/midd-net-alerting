@@ -326,10 +326,10 @@ def pn_adoption(y):
                         "not yet known, 'connections' is users whose MiddleburyCollege connections are not yet "
                         "checked. A falling line means the history is loading; a flat line means it is stalled."))
     os_note = ("Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded "
-               "into one short list; 'Unknown' is a device Mist could not identify.")
-    p += [bargauge("Operating systems on PantherNet", 0, top + 30, 12, 9,
+               "into one short list; 'Unknown' is a device Mist could not identify." + OS_CAVEAT)
+    p += [bargauge("Device types on PantherNet (best guess)", 0, top + 30, 12, 9,
                    'sort_desc(mist_ssid_os_clients{ssid="PantherNet"})', "{{os}}", os_note),
-          bargauge("Operating systems on MiddleburyCollege", 12, top + 30, 12, 9,
+          bargauge("Device types on MiddleburyCollege (best guess)", 12, top + 30, 12, 9,
                    'sort_desc(mist_ssid_os_clients{ssid="MiddleburyCollege"})', "{{os}}",
                    os_note + " The old network: which kinds of device have not moved yet.")]
     return p
@@ -690,7 +690,21 @@ CAMPUS_PN = "(%s + %s)" % (_z(MIST_PN), _z(ARUBA_PN))
 CAMPUS_MC = "(%s + %s)" % (_z(MIST_MC), _z(ARUBA_MC))
 CAMPUS_NOTE = ("Mist and Aruba added together: the devices connected right now, counted on both platforms "
                "(Mist counts a device if it was seen in the last 30 minutes; Aruba is the controllers' live tables).")
+OS_CAVEAT = (" This is the network's best guess, read from how each device introduces itself (DHCP and browser "
+             "fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide "
+             "themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend "
+             "and a rough mix, not an exact inventory.")
 OS_METRICS = '__name__=~"aruba_ssid_os_clients|mist_ssid_os_clients"'
+
+
+A_BYOD = 'sum(aruba_ssid_role_clients{ssid="PantherNet", role="BYOD Device"})'
+A_MAN = 'sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"})'
+M_BYOD = 'sum(mist_pn_group_clients{group="BYOD"})'
+M_MAN = 'sum(mist_pn_group_clients{group="Managed"})'
+CAMPUS_BYOD = "(%s + %s)" % (_z(A_BYOD), _z(M_BYOD))
+CAMPUS_MAN = "(%s + %s)" % (_z(A_MAN), _z(M_MAN))
+BYOD_NOTE = ("A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; "
+             "devices on neither are left out.")
 
 
 def pn_campus_view():
@@ -721,31 +735,68 @@ def pn_campus_view():
                     target(ARUBA_MC, "MiddleburyCollege - Aruba", ref="D")],
                    "Devices connected to each network, on each platform. " + CAMPUS_NOTE),
 
-        bargauge("Operating systems on PantherNet", 0, 13, 12, 9, "sort_desc(%s)" % pn_os, "{{os}}",
-                 "Campus-wide, Mist and Aruba together. Operating systems are folded into one short list; "
-                 "'Unknown' is a device the network could not identify."),
-        bargauge("Operating systems on MiddleburyCollege", 12, 13, 12, 9,
+        bargauge("Device types on PantherNet (best guess)", 0, 13, 12, 9, "sort_desc(%s)" % pn_os, "{{os}}",
+                 "Campus-wide, Mist and Aruba together, folded into one short list; 'Unknown' is a device the "
+                 "network could not identify." + OS_CAVEAT),
+        bargauge("Device types on MiddleburyCollege (best guess)", 12, 13, 12, 9,
                  'sort_desc(sum by (os) ({%s, ssid="MiddleburyCollege"}))' % OS_METRICS, "{{os}}",
-                 "The same view for the old network: which kinds of device have not moved yet."),
+                 "The same view for the old network: which kinds of device have not moved yet." + OS_CAVEAT),
 
-        bargauge("PantherNet share by operating system", 0, 22, 24, 9,
+        bargauge("PantherNet share by device type (best guess)", 0, 22, 18, 9,
                  "sort_desc(100 * %s / %s)" % (pn_os, all_os), "{{os}}",
-                 "For each operating system, the percentage of its devices that are on PantherNet rather than "
-                 "MiddleburyCollege. A short bar is where adoption is lagging.", unit="percent", max_=100),
+                 "For each device type, the percentage of its devices that are on PantherNet rather than "
+                 "MiddleburyCollege. A short bar is where adoption is lagging." + OS_CAVEAT, unit="percent", max_=100),
+        stat("Devices the network could not identify", 18, 22, 6,
+             '100 * sum({%s, ssid=~"PantherNet|MiddleburyCollege", os="Unknown"}) / '
+             'sum({%s, ssid=~"PantherNet|MiddleburyCollege"})' % (OS_METRICS, OS_METRICS),
+             "The share of devices on PantherNet or MiddleburyCollege whose type is 'Unknown'. The higher this is, "
+             "the less the device-type charts can be trusted." + OS_CAVEAT, unit="percent",
+             thresholds=steps((GREEN, None), (AMBER, 20), (RED, 40))),
+        stat("PantherNet share, identified devices only", 18, 26, 6,
+             '100 * sum({%s, ssid="PantherNet", os!="Unknown"}) / '
+             'sum({%s, ssid=~"PantherNet|MiddleburyCollege", os!="Unknown"})' % (OS_METRICS, OS_METRICS),
+             "The adoption percentage counting only devices whose type is known. If it is close to the headline "
+             "share, the unidentified devices are not skewing the result.", unit="percent"),
 
-        row("Sign-in problems and overlap", 31),
-        stat("Users who failed to sign in", 0, 32, 6, "mist_pn_auth_failure_clients",
+        row("BYOD and managed devices on PantherNet", 31),
+        stat("BYOD devices", 0, 32, 5, CAMPUS_BYOD,
+             "Campus-wide, right now: PantherNet devices that are personal (BYOD). Mist buildings are counted by "
+             "the VLAN the device landed on, Aruba buildings by the role the controller gave it. " + BYOD_NOTE),
+        stat("Managed devices", 5, 32, 5, CAMPUS_MAN,
+             "Campus-wide, right now: PantherNet devices that are college-managed, counted the same way. "
+             + BYOD_NOTE),
+        stat("Managed share", 10, 32, 5, "100 * %s / (%s + %s)" % (CAMPUS_MAN, CAMPUS_BYOD, CAMPUS_MAN),
+             "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed, Mist and "
+             "Aruba together.", unit="percent"),
+        stat("Mist side", 15, 32, 4, "100 * %s / (%s + %s)" % (_z(M_MAN), _z(M_BYOD), _z(M_MAN)),
+             "The managed share for the Mist buildings only.", unit="percent"),
+        stat("Aruba side", 19, 32, 5, "100 * %s / (%s + %s)" % (_z(A_MAN), _z(A_BYOD), _z(A_MAN)),
+             "The managed share for the Aruba buildings only.", unit="percent"),
+        timeseries("BYOD and managed devices over time", 0, 36, 12, 8,
+                   [target(M_BYOD, "BYOD - Mist"), target(A_BYOD, "BYOD - Aruba", ref="B"),
+                    target(M_MAN, "Managed - Mist", ref="C"), target(A_MAN, "Managed - Aruba", ref="D")],
+                   "PantherNet devices by group, on each platform. It is a snapshot of who is connected, so it "
+                   "follows the school day. " + BYOD_NOTE),
+        timeseries("Managed share over time", 12, 36, 12, 8,
+                   [target("100 * %s / (%s + %s)" % (CAMPUS_MAN, CAMPUS_BYOD, CAMPUS_MAN), "Campus"),
+                    target("100 * %s / (%s + %s)" % (_z(M_MAN), _z(M_BYOD), _z(M_MAN)), "Mist side", ref="B"),
+                    target("100 * %s / (%s + %s)" % (_z(A_MAN), _z(A_BYOD), _z(A_MAN)), "Aruba side", ref="C")],
+                   "The percentage of classified PantherNet devices that are managed. " + BYOD_NOTE,
+                   unit="percent", min_=None),
+
+        row("Sign-in problems and overlap", 44),
+        stat("Users who failed to sign in", 0, 45, 6, "mist_pn_auth_failure_clients",
              "Mist buildings only, last 24 hours: unique users with at least one failed PantherNet sign-in. "
              "Aruba does not report failures. " + PN_FAILURE_DEF + LOADING_NOTE,
              thresholds=steps((GREEN, None), (AMBER, 1)), no_value=LOADING),
-        stat("...who then used MiddleburyCollege", 6, 32, 6, 'mist_pn_fallback_rate{match="user"}',
+        stat("...who then used MiddleburyCollege", 6, 45, 6, 'mist_pn_fallback_rate{match="user"}',
              "Mist buildings only: of the failing users old enough to judge, the percentage who connected to "
              "MiddleburyCollege within 30 minutes. " + PN_FALLBACK_DEF + LOADING_NOTE, unit="percentunit",
              thresholds=steps((GREEN, None), (AMBER, 0.25), (RED, 0.5)), no_value=LOADING),
-        stat("People on both networks", 12, 32, 6, "aruba_people_on_both_ssids",
+        stat("People on both networks", 12, 45, 6, "aruba_people_on_both_ssids",
              "Aruba buildings only: people (by username) with a device on PantherNet and another on "
              "MiddleburyCollege right now."),
-        stat("Data age", 18, 32, 6,
+        stat("Data age", 18, 45, 6,
              'max(time() - mist_exporter_last_success_timestamp_seconds{source=~"clients|aruba"})',
              "Seconds since the older of the Mist and Aruba counts last refreshed.", unit="s",
              thresholds=steps((GREEN, None), (AMBER, 300), (RED, 900)), color_mode="background"),

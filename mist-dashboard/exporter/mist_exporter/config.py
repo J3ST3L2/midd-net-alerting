@@ -15,6 +15,10 @@ def _read_secret(file_var, value_var):
     return os.environ.get(value_var, "").strip()
 
 
+def _csv(text):
+    return tuple(p.strip() for p in text.split(",") if p.strip())
+
+
 @dataclass(frozen=True)
 class Config:
     mist_host: str = "api.mist.com"
@@ -54,6 +58,9 @@ class Config:
     aruba_interval: int = 120
     aruba_ca_file: str = ""           # verify the controllers' certificates against this CA; empty = self-signed ok
     aruba_timeout: int = 60
+    # Which VLANs on the PantherNet SSID carry BYOD and managed devices (Mist buildings). Kept in .env, not in Git.
+    pn_byod_vlans: tuple = ()
+    pn_managed_vlans: tuple = ()
     alarm_window_hours: int = 24
     page_limit: int = 100
     max_pages: int = 20
@@ -94,6 +101,8 @@ def load():
         aruba_interval=int(env("ARUBA_INTERVAL_S", "120")),
         aruba_ca_file=env("ARUBA_CA_FILE", "").strip(),
         aruba_timeout=int(env("ARUBA_TIMEOUT_S", "60")),
+        pn_byod_vlans=_csv(env("PN_BYOD_VLANS", "")),
+        pn_managed_vlans=_csv(env("PN_MANAGED_VLANS", "")),
         alarm_window_hours=int(env("ALARM_WINDOW_HOURS", "24")),
         page_limit=int(env("PAGE_LIMIT", "100")),
         max_pages=int(env("MAX_PAGES", "20")),
