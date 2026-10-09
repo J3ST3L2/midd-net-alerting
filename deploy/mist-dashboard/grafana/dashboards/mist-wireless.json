@@ -868,13 +868,14 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unique users with at least one failed PantherNet sign-in in the last 24 hours. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted.",
+      "description": "Unique users with at least one failed PantherNet sign-in in the last 24 hours. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted. Blank ('Loading history') until the last 24 hours have been read after a restart, so a restart never shows a false low number.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
+          "noValue": "Loading history",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -932,13 +933,14 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Of the failing users old enough to judge, the percentage who connected to MiddleburyCollege within 30 minutes of failing. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. Clients with no username are excluded.",
+      "description": "Of the failing users old enough to judge, the percentage who connected to MiddleburyCollege within 30 minutes of failing. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. Clients with no username are excluded. Blank ('Loading history') until the last 24 hours have been read after a restart, so a restart never shows a false low number.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
+          "noValue": "Loading history",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1000,13 +1002,14 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Failing users old enough (30+ minutes) to judge, whose MiddleburyCollege connections were checked: the base for the percentage beside it.",
+      "description": "Failing users old enough (30+ minutes) to judge, whose MiddleburyCollege connections were checked: the base for the percentage beside it. Blank ('Loading history') until the last 24 hours have been read after a restart, so a restart never shows a false low number.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
+          "noValue": "Loading history",
           "thresholds": {
             "mode": "absolute",
             "steps": [
