@@ -39,6 +39,11 @@ class Config:
     fallback_pages_per_slice: int = 16      # event pages per slice, split between the two feeds
     fallback_lookups_per_slice: int = 24    # username / connection lookups per slice
     fallback_totals_interval: int = 300     # unique-client totals per SSID
+    # Cache of the expensive username lookups, as keyed hashes only, so a restart does not reload for hours.
+    # Needs a secret key of 32+ characters in fallback_cache_key_file; without one it stays in memory.
+    fallback_cache_path: str = "/state/pn-cache.sqlite3"
+    fallback_cache_key_file: str = ""
+    fallback_cache_ttl_h: int = 72
     # ClearPass syslog feed for the Aruba side (see clearpass_pn.py). Off unless enabled, and it refuses
     # to start without an allow-list of ClearPass source addresses.
     clearpass_enabled: bool = False
@@ -78,6 +83,9 @@ def load():
         fallback_pages_per_slice=int(env("FALLBACK_PAGES_PER_SLICE", "16")),
         fallback_lookups_per_slice=int(env("FALLBACK_LOOKUPS_PER_SLICE", "24")),
         fallback_totals_interval=int(env("FALLBACK_TOTALS_INTERVAL_S", "300")),
+        fallback_cache_path=env("FALLBACK_CACHE_PATH", "/state/pn-cache.sqlite3").strip(),
+        fallback_cache_key_file=env("PN_CACHE_KEY_FILE", "").strip(),
+        fallback_cache_ttl_h=int(env("FALLBACK_CACHE_TTL_H", "72")),
         clearpass_enabled=env("CLEARPASS_SYSLOG_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
         clearpass_host=env("CLEARPASS_SYSLOG_HOST", "0.0.0.0").strip(),
         clearpass_port=int(env("CLEARPASS_SYSLOG_PORT", "5514")),

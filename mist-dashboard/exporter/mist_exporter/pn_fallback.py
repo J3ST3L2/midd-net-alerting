@@ -15,11 +15,20 @@ This module holds state and arithmetic only. The Mist client is passed in by ``r
 event pages are fetched through callables, so everything here is testable without a network.
 """
 import collections
+import hashlib
+import hmac
+import json
+import logging
+import os
 import re
+import sqlite3
 import threading
+import time
 
 from .metrics import Family, _mac, _num
 from .mist_api import MistError
+
+log = logging.getLogger("mist_exporter")
 
 FAIL_EVENT = "MARVIS_EVENT_CLIENT_AUTH_FAILURE"
 OVERLAP_S = 60                 # incremental passes re-read this far back, de-duplicated on arrival
@@ -123,20 +132,136 @@ class Stream:
         return used
 
 
+class Hasher:
+    """Keyed hash for anything identifying (usernames, MACs) that may be cached on disk.
+
+    HMAC-SHA256 truncated to 128 bits. With a secret key, a copy of the cache file alone cannot be used to
+    test a guessed username or MAC. It is still pseudonymous, not anonymous: whoever holds both the key and
+    the file can check a guess. With no key it is plain hashing, used only for in-memory comparisons."""
+
+    def __init__(self, key=b""):
+        self._key = key
+
+    def __call__(self, value):
+        return hmac.new(self._key, str(value).lower().encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+class CacheStore:
+    """SQLite cache of the two expensive kinds of Mist lookup, holding keyed hashes only.
+
+      ident(mac_h, user_h, os, model, at)   which user a failing device belongs to ('' = no username)
+      mc(user_h, at, macs)                  which devices a user connected to MiddleburyCollege with
+
+    No raw username or MAC is ever written. Any database error switches the cache off (memory-only) with
+    a one-line log naming the error type; it never stops the exporter."""
+
+    def __init__(self, path):
+        self.path = path
+        self._lock = threading.Lock()
+        self._db = sqlite3.connect(path, check_same_thread=False)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        try:
+            with self._lock:
+                self._db.execute("CREATE TABLE IF NOT EXISTS ident(mac_h TEXT PRIMARY KEY, user_h TEXT NOT NULL, "
+                                 "os TEXT, model TEXT, at INTEGER NOT NULL)")
+                self._db.execute("CREATE TABLE IF NOT EXISTS mc(user_h TEXT PRIMARY KEY, at INTEGER NOT NULL, "
+                                 "macs TEXT NOT NULL)")
+                self._db.commit()
+        except sqlite3.Error:
+            self._db.close()                      # a corrupt file must not leak the connection
+            raise
+        self.ok = True
+
+    def _guard(self, fn, default=None):
+        if not self.ok:
+            return default
+        try:
+            with self._lock:
+                return fn()
+        except sqlite3.Error as e:
+            self.ok = False
+            log.warning("pn cache disabled after a database error: %s", type(e).__name__)
+            return default
+
+    def load(self, min_at):
+        """(ident, mc) entries newer than min_at, in the shape the tracker keeps in memory."""
+        def go():
+            ident = {m: {"key": u, "os": o or "", "model": md or "", "at": at} for m, u, o, md, at in
+                     self._db.execute("SELECT mac_h, user_h, os, model, at FROM ident WHERE at >= ?", (min_at,))}
+            mc = {}
+            for u, at, macs in self._db.execute("SELECT user_h, at, macs FROM mc WHERE at >= ?", (min_at,)):
+                mc[u] = {"at": at, "macs": {m: (o, md) for m, o, md in json.loads(macs)}}
+            return ident, mc
+        return self._guard(go, ({}, {}))
+
+    def save_ident(self, mac_h, rec):
+        self._guard(lambda: self._db.execute(
+            "INSERT OR REPLACE INTO ident VALUES (?, ?, ?, ?, ?)",
+            (mac_h, rec["key"], rec["os"], rec["model"], rec["at"])))
+
+    def save_mc(self, user_h, rec):
+        self._guard(lambda: self._db.execute(
+            "INSERT OR REPLACE INTO mc VALUES (?, ?, ?)",
+            (user_h, rec["at"], json.dumps([[m, o, md] for m, (o, md) in rec["macs"].items()]))))
+
+    def close(self):
+        try:
+            self._db.close()
+        except sqlite3.Error:
+            pass
+
+    def commit(self, prune_before=None):
+        def go():
+            if prune_before is not None:
+                self._db.execute("DELETE FROM ident WHERE at < ?", (prune_before,))
+                self._db.execute("DELETE FROM mc WHERE at < ?", (prune_before,))
+            self._db.commit()
+        self._guard(go)
+
+
+def open_cache(path, key_file):
+    """(Hasher, CacheStore or None). Persistence needs a secret key of at least 32 characters in `key_file`;
+    without one the tracker works exactly as before, in memory only."""
+    key = ""
+    if key_file and os.path.exists(key_file):
+        with open(key_file, encoding="utf-8") as f:
+            key = f.read().strip()
+    if len(key) < 32:
+        log.info("pn cache: persistence off (%s)", "no key file" if not key else "key shorter than 32 characters")
+        return Hasher(b""), None
+    try:
+        store = CacheStore(path)
+    except (sqlite3.Error, OSError) as e:
+        log.warning("pn cache: persistence off (cannot open the database: %s)", type(e).__name__)
+        return Hasher(key.encode("utf-8")), None
+    log.info("pn cache: persistence on, keyed hashes only")
+    return Hasher(key.encode("utf-8")), store
+
+
 class Tracker:
-    def __init__(self, window_s, lookback_s, pn_ssid="PantherNet", mc_ssid="MiddleburyCollege"):
+    def __init__(self, window_s, lookback_s, pn_ssid="PantherNet", mc_ssid="MiddleburyCollege",
+                 hasher=None, store=None, cache_ttl_s=72 * 3600, now=None):
         self.window_s, self.lookback_s = window_s, lookback_s
         self.pn_ssid, self.mc_ssid = pn_ssid, mc_ssid
+        self._h, self._store, self.cache_ttl_s = hasher or Hasher(), store, cache_ttl_s
         self.fail, self.assoc = Stream(), Stream()
-        self._fail_events = {}      # (mac, ts, reason_code, status_code) -> (ts, mac, reason)
-        self._assoc_ts = {}         # mac -> set of association times on MiddleburyCollege
-        self._ident = {}            # mac -> {"key", "names", "os", "model"}; key "" = no username
-        self._mc = {}               # user key -> {"at", "macs": {mac: (os, model)}}
+        # key -> (ts, raw mac, reason, mac hash). The raw MAC stays in memory: Mist lookups need it.
+        self._fail_events = {}
+        self._assoc_ts = {}         # mac hash -> set of association times on MiddleburyCollege
+        self._ident = {}            # mac hash -> {"key": user hash ('' = none), "os", "model", "at"}
+        self._names = {}            # user hash -> raw usernames, memory only; empty for entries from the cache
+        self._mc = {}               # user hash -> {"at", "macs": {mac hash: (os, model)}}
         self._totals = {}           # ssid -> unique clients (Mist clients/search total)
         self._totals_at = 0
         self._latched = False
         self._busy = True           # outstanding work: history still loading or lookups still queued
         self._lock = threading.Lock()
+        if store is not None:
+            self._ident, self._mc = store.load((now if now is not None else time.time()) - cache_ttl_s)
+        self.restored = (len(self._ident), len(self._mc))
         self._families = self._build(0, [], collections.Counter(), {}, {}, 0, 0, 0, 0, 0, 0, 0)
 
     # ---- ingestion -------------------------------------------------------------------------
@@ -144,54 +269,62 @@ class Tracker:
         mac = _mac(ev.get("mac"))
         if mac:
             key = (mac, ts, _int(ev.get("reason_code")), _int(ev.get("status_code")))
-            self._fail_events[key] = (ts, mac, classify(ev))
+            self._fail_events[key] = (ts, mac, classify(ev), self._h(mac))
 
     def ingest_assoc(self, ev, ts):
         mac = _mac(ev.get("mac"))
         if mac:
-            self._assoc_ts.setdefault(mac, set()).add(ts)
+            self._assoc_ts.setdefault(self._h(mac), set()).add(ts)
 
     def _prune(self, now):
         cutoff = now - self.lookback_s
         self._fail_events = {k: v for k, v in self._fail_events.items() if v[0] >= cutoff}
-        for mac in list(self._assoc_ts):
-            kept = {t for t in self._assoc_ts[mac] if t >= cutoff}
+        for mac_h in list(self._assoc_ts):
+            kept = {t for t in self._assoc_ts[mac_h] if t >= cutoff}
             if kept:
-                self._assoc_ts[mac] = kept
+                self._assoc_ts[mac_h] = kept
             else:
-                del self._assoc_ts[mac]
-        live = {v[1] for v in self._fail_events.values()}
-        self._ident = {m: i for m, i in self._ident.items() if m in live}
-        keys = {i["key"] for i in self._ident.values() if i["key"]}
-        self._mc = {k: v for k, v in self._mc.items() if k in keys}
+                del self._assoc_ts[mac_h]
+        # Cached lookups expire by age, not by whether today's events mention them yet: a restart loads the
+        # cache before the history has been re-read.
+        oldest = now - self.cache_ttl_s
+        self._ident = {m: i for m, i in self._ident.items() if i["at"] >= oldest}
+        self._mc = {u: v for u, v in self._mc.items() if v["at"] >= oldest}
+        self._names = {u: n for u, n in self._names.items() if u in {i["key"] for i in self._ident.values()}}
 
     # ---- lookups (what still needs a Mist call) ----------------------------------------------
     def pending_identities(self):
         """Counted-failure MACs whose username has not been looked up, newest failure first."""
         newest = {}
-        for ts, mac, reason in self._fail_events.values():
-            if reason in COUNTED and mac not in self._ident:
+        for ts, mac, reason, mac_h in self._fail_events.values():
+            if reason in COUNTED and mac_h not in self._ident:
                 newest[mac] = max(ts, newest.get(mac, 0))
         return [m for m, _ in sorted(newest.items(), key=lambda kv: -kv[1])]
 
-    def set_identity(self, mac, rows):
+    def set_identity(self, mac, rows, now):
         names = _names(rows)
         keys = sorted({normalize_username(n) for n in names} - {""})
+        user_h = self._h(keys[0]) if keys else ""
         os_, model = _device(rows)
-        self._ident[mac] = {"key": keys[0] if keys else "", "names": names, "os": os_, "model": model}
+        rec = {"key": user_h, "os": os_, "model": model, "at": now}
+        self._ident[self._h(mac)] = rec
+        if user_h:
+            self._names[user_h] = names
+        if self._store is not None:
+            self._store.save_ident(self._h(mac), rec)
 
     def _failures_by_user(self):
         users = collections.defaultdict(list)
-        for ts, mac, reason in self._fail_events.values():
-            ident = self._ident.get(mac)
+        for ts, _mac_, reason, mac_h in self._fail_events.values():
+            ident = self._ident.get(mac_h)
             if reason in COUNTED and ident and ident["key"]:
                 users[ident["key"]].append((ts, ident["os"], ident["model"]))
         return users
 
     def pending_mc_users(self, now):
         """Users with a matured failure whose MiddleburyCollege connections are not yet fetched (or were
-        fetched before the failure's window closed). Returns [(key, raw usernames)]."""
-        raw = {i["key"]: i["names"] for i in self._ident.values() if i["key"]}
+        fetched before the failure's window closed). Returns [(user hash, raw usernames or [])]; the names
+        are empty for a user known only from the cache, and run_slice then looks them up again."""
         out = []
         for key, fails in self._failures_by_user().items():
             mature = [f[0] for f in fails if f[0] <= now - self.window_s]
@@ -199,11 +332,28 @@ class Tracker:
                 continue
             have = self._mc.get(key)
             if have is None or have["at"] < max(mature) + self.window_s:
-                out.append((max(mature), key, raw.get(key, [])))
+                out.append((max(mature), key, self._names.get(key, [])))
         return [(k, names) for _, k, names in sorted(out, reverse=True)]
 
-    def set_mc(self, key, now, rows):
-        self._mc[key] = {"at": now, "macs": {_mac(r.get("mac")): _device([r]) for r in rows if _mac(r.get("mac"))}}
+    def raw_mac_for_user(self, user_h):
+        """A raw MAC from this window's failures whose cached identity belongs to this user."""
+        for ts, mac, reason, mac_h in self._fail_events.values():
+            ident = self._ident.get(mac_h)
+            if reason in COUNTED and ident and ident["key"] == user_h:
+                return mac
+        return None
+
+    def set_names(self, user_h, rows):
+        names = _names(rows)
+        if names:
+            self._names[user_h] = names
+        return names
+
+    def set_mc(self, user_h, now, rows):
+        rec = {"at": now, "macs": {self._h(_mac(r.get("mac"))): _device([r]) for r in rows if _mac(r.get("mac"))}}
+        self._mc[user_h] = rec
+        if self._store is not None:
+            self._store.save_mc(user_h, rec)
 
     def totals_due(self, now, interval):
         return now - self._totals_at >= interval
@@ -224,8 +374,8 @@ class Tracker:
                 continue
             hit_user = hit_device = False
             for ts, os_, model in mature:
-                for mac, dev in have["macs"].items():
-                    if any(ts < t <= ts + self.window_s for t in self._assoc_ts.get(mac, ())):
+                for mac_h, dev in have["macs"].items():
+                    if any(ts < t <= ts + self.window_s for t in self._assoc_ts.get(mac_h, ())):
                         hit_user = True
                         if os_ and model and dev == (os_, model):
                             hit_device = True
@@ -240,11 +390,10 @@ class Tracker:
         """Recompute the exported families (once per slice, so scrapes cost nothing)."""
         with self._lock:
             self._prune(now)
-            reasons = collections.Counter(r for _, _, r in self._fail_events.values())
-            counted = [(ts, m) for ts, m, r in self._fail_events.values() if r in COUNTED]
-            idents = [self._ident.get(m) for _, m in counted]
+            reasons = collections.Counter(v[2] for v in self._fail_events.values())
+            counted = [(v[0], v[3]) for v in self._fail_events.values() if v[2] in COUNTED]
             users = self._failures_by_user()
-            unresolved = len({m for (_, m), i in zip(counted, idents) if i is not None and not i["key"]})
+            unresolved = len({m for _, m in counted if m in self._ident and not self._ident[m]["key"]})
             pending_ident = len(self.pending_identities())
             pending_mc = len(self.pending_mc_users(now))
             res = self._evaluate(now)
@@ -255,6 +404,8 @@ class Tracker:
             self._families = self._build(
                 len(counted), counted, reasons, res, dict(self._totals), len(users), unresolved,
                 pending_ident, pending_mc, 1 if self._latched else 0, self.window_s, now)
+        if self._store is not None:
+            self._store.commit(prune_before=now - self.cache_ttl_s)
 
     def _build(self, n_events, counted, reasons, res, totals, n_users, unresolved, pend_i, pend_m,
                complete, window, now):
@@ -287,6 +438,9 @@ class Tracker:
             fam("mist_pn_fallback_window_seconds", "Configured fallback window.", [({}, float(window))] if now else []),
             fam("mist_pn_backfill_complete", "1 once the 24 h history and its lookups are loaded.",
                 [({}, float(complete))] if now else []),
+            fam("mist_pn_cache_entries", "Cached lookups restored from disk at start (keyed hashes only).",
+                [({"kind": "devices"}, float(self.restored[0])), ({"kind": "users"}, float(self.restored[1]))]
+                if now else []),
         ]
         if not complete:
             fams = [Family(f.name, f.help, f.type, []) if f.name in PARTIAL_WHILE_LOADING else f for f in fams]
@@ -321,15 +475,26 @@ def run_slice(t, client, cfg, now):
         budget = cfg.fallback_lookups_per_slice
         for mac in t.pending_identities()[:budget]:
             rows, _ = client.search_clients(now - t.lookback_s, now, mac=mac)
-            t.set_identity(mac, [r for r in rows if _mac(r.get("mac")) == mac])
+            t.set_identity(mac, [r for r in rows if _mac(r.get("mac")) == mac], now)
             budget -= 1
-        for key, names in t.pending_mc_users(now)[:max(budget, 0)]:
+        for key, names in t.pending_mc_users(now):
+            if budget <= 0:
+                break
+            if not names:
+                # Known only from the cache (hashes): ask Mist for the name again, through one of their MACs.
+                mac = t.raw_mac_for_user(key)
+                if mac is not None:
+                    rows, _ = client.search_clients(now - t.lookback_s, now, mac=mac)
+                    names = t.set_names(key, [r for r in rows if _mac(r.get("mac")) == mac])
+                    budget -= 1
             found = []
             for name in names:
                 found, _ = client.search_clients(now - t.lookback_s, now, ssid=t.mc_ssid, username=name)
                 if found:
                     break
-            t.set_mc(key, now, found)
+            if names or not t._mc.get(key):
+                t.set_mc(key, now, found)
+            budget -= 1
         if t.totals_due(now, cfg.fallback_totals_interval):
             for ssid in (t.pn_ssid, t.mc_ssid):
                 _, total = client.search_clients(now - t.lookback_s, now, limit=1, ssid=ssid)

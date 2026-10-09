@@ -26,6 +26,11 @@ services:
       MIST_API_HOST: ${MIST_API_HOST:-api.mist.com}
       MIST_ORG_ID: ${MIST_ORG_ID:?set MIST_ORG_ID in .env}
       MIST_API_TOKEN_FILE: /run/secrets/mist_api_token
+      # Cache of the username lookups, as keyed hashes only (see README "Lookup cache"). Needs
+      # secrets/pn-cache-key; without a key of 32+ characters the exporter keeps everything in memory.
+      PN_CACHE_KEY_FILE: /run/secrets/pn_cache_key
+      FALLBACK_CACHE_PATH: /state/pn-cache.sqlite3
+      FALLBACK_CACHE_TTL_H: ${FALLBACK_CACHE_TTL_H:-72}
       # PantherNet adoption (see README). Defaults live in the exporter; override in .env if needed.
       FALLBACK_ENABLED: ${FALLBACK_ENABLED:-true}
       FALLBACK_WINDOW_S: ${FALLBACK_WINDOW_S:-1800}
@@ -45,6 +50,9 @@ services:
       - "${CLEARPASS_SYSLOG_BIND:-127.0.0.1}:${CLEARPASS_SYSLOG_HOST_PORT:-5514}:5514/tcp"
     secrets:
       - mist_api_token
+      - pn_cache_key
+    volumes:
+      - exporter-state:/state
     networks:
       - backend
 
@@ -124,9 +132,12 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
+  exporter-state:
 
 secrets:
   mist_api_token:
     file: ./secrets/mist-api-token
+  pn_cache_key:
+    file: ./secrets/pn-cache-key
   grafana_admin_password:
     file: ./secrets/grafana-admin-password
