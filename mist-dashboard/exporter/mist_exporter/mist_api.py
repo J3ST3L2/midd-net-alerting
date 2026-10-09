@@ -77,13 +77,15 @@ class MistClient:
                 return out
         raise MistError("site stats exceeded 10 pages; refusing partial result")
 
-    def client_counts(self, distinct, duration, site_id=None):
+    def client_counts(self, distinct, duration, site_id=None, ssid=None):
         """Wireless clients seen in the last `duration`, grouped by `distinct` (ap, band, ssid), for
-        the whole org or one site. Mist caps the result list at `limit`, so a long group list (per-AP)
-        may omit its smallest entries."""
+        the whole org or one site, optionally only one SSID. Mist caps the result list at `limit`, so a
+        long group list (per-AP) may omit its smallest entries."""
         scope = "/sites/%s" % site_id if site_id else "/orgs/%s" % self.org_id
-        body = self._get(self._url(scope + "/clients/count",
-                                   {"distinct": distinct, "duration": duration, "limit": 1000}))
+        params = {"distinct": distinct, "duration": duration, "limit": 1000}
+        if ssid:
+            params["ssid"] = ssid
+        body = self._get(self._url(scope + "/clients/count", params))
         if not isinstance(body, dict) or not isinstance(body.get("results"), list):
             raise MistError("unexpected client count response shape")
         return [r for r in body["results"] if isinstance(r, dict)]

@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 
 from .mist_api import MistError
+from .osfamily import os_family
 from .pn_fallback import normalize_username
 
 log = logging.getLogger("mist_exporter")
@@ -95,6 +96,7 @@ def summarize(tables, pn_ssid, mc_ssid):
     per_ssid, per_ctrl = collections.Counter(), collections.Counter()
     roles, devices = collections.defaultdict(collections.Counter), collections.defaultdict(collections.Counter)
     bands, auth = collections.Counter(), collections.Counter()
+    os_ = collections.defaultdict(collections.Counter)
     people = collections.defaultdict(set)
     for ctrl, rows in tables.items():
         for r in rows:
@@ -110,6 +112,7 @@ def summarize(tables, pn_ssid, mc_ssid):
             per_ctrl[(ctrl, ssid)] += 1
             roles[ssid][_label(r.get("Role"))] += 1
             devices[ssid][_label(r.get("Type"))] += 1
+            os_[ssid][os_family(r.get("Type"))] += 1
             bands[(ssid, band)] += 1
             auth[(ssid, _label(r.get("Auth")))] += 1
             name = normalize_username(r.get("Name"))
@@ -117,6 +120,7 @@ def summarize(tables, pn_ssid, mc_ssid):
                 people[ssid].add(name)
     return {"clients": dict(per_ssid), "by_controller": dict(per_ctrl),
             "roles": {s: _top(c) for s, c in roles.items()}, "devices": {s: _top(c) for s, c in devices.items()},
+            "os": {s: dict(c) for s, c in os_.items()},
             "bands": dict(bands), "auth": dict(auth),
             "people": {s: len(n) for s, n in people.items()},
             "people_on_both": len(people.get(pn_ssid, set()) & people.get(mc_ssid, set()))}

@@ -6,6 +6,8 @@ missing value must produce no sample, never a wrong one.
 import collections
 import re
 
+from .osfamily import os_family
+
 Family = collections.namedtuple("Family", "name help type samples")
 
 
@@ -128,6 +130,19 @@ def wireless_families(devices, sites, site_stats, ap_counts, site_breakdowns):
     return [site_clients, ap_clients, by_band, by_ssid]
 
 
+def mist_os_families(os_by_ssid):
+    """Clients per SSID and operating-system family (see osfamily.py) from clients/count?distinct=os, per SSID."""
+    fam = Family("mist_ssid_os_clients", "Mist clients per SSID and operating-system family.", "gauge", [])
+    for ssid, rows in sorted(os_by_ssid.items()):
+        counts = collections.Counter()
+        for r in rows:
+            n = _num(r.get("count"))
+            if n is not None:
+                counts[os_family(r.get("last_os"))] += n
+        fam.samples.extend(({"ssid": ssid, "os": os_}, n) for os_, n in sorted(counts.items()))
+    return [fam]
+
+
 def site_ap_families(site_stats):
     """AP counts per site with the site's GPS position as labels, for map panels. Sites without
     coordinates (or with 0/0 placeholders) are skipped: a wrong pin is worse than a missing one."""
@@ -200,6 +215,8 @@ def aruba_families(data):
             nested(data.get("roles", {}), "role")),
         fam("aruba_ssid_device_clients", "Clients per SSID and device type the controller identified.",
             nested(data.get("devices", {}), "device_type")),
+        fam("aruba_ssid_os_clients", "Clients per SSID and operating-system family (same list as Mist's).",
+            nested(data.get("os", {}), "os")),
         fam("aruba_ssid_band_clients", "Clients per SSID and radio band.", per(data.get("bands", {}), "ssid", "band")),
         fam("aruba_ssid_auth_clients", "Clients per SSID and authentication method.",
             per(data.get("auth", {}), "ssid", "auth")),

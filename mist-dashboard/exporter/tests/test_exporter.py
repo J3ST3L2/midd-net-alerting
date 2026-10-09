@@ -181,11 +181,13 @@ class FakeClient:
                  "num_ap": 40, "num_ap_connected": 38, "latlng": {"lat": 44.0087, "lng": -73.1768}},
                 {"id": "s2", "name": "Quiet Site", "num_clients": 0}]
 
-    def client_counts(self, distinct, duration, site_id=None):
+    def client_counts(self, distinct, duration, site_id=None, ssid=None):
         self.client_calls.append((distinct, duration, site_id))
         return {"ap": [{"last_ap": "5c5b35000001", "count": 14}],
                 "band": [{"band": "5", "count": 9}],
-                "ssid": [{"last_ssid": "eduroam", "count": 9}]}[distinct]
+                "ssid": [{"last_ssid": "eduroam", "count": 9}],
+                "os": [{"last_os": "macOS Catalina", "count": 6}, {"last_os": "iOS 16", "count": 3},
+                       {"last_os": "Unknown", "count": 2}]}[distinct]
 
     def sle_summary(self, site_id, metric, duration):
         self.sle_calls.append(("summary", site_id, metric, duration))

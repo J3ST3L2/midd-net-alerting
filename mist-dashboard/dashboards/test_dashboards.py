@@ -27,11 +27,11 @@ class FakeClient:
 def exported_metric_names():
     """Every family name the exporter can emit, taken from its own # TYPE lines."""
     text = Collector(Config(), FakeClient()).render()
-    from mist_exporter.metrics import (alarm_families, aruba_families, device_families, sle_families,
-                                       wireless_families)
+    from mist_exporter.metrics import (alarm_families, aruba_families, device_families, mist_os_families,
+                                       sle_families, wireless_families)
     names = {f.name for f in device_families([], {}) + alarm_families([], {})
              + wireless_families([], {}, [], [], {}) + sle_families({}, {})
-             + aruba_families({})}
+             + aruba_families({}) + mist_os_families({})}
     return names | set(re.findall(r"^# TYPE (\S+)", text, re.M))
 
 
@@ -112,7 +112,7 @@ class Dashboards(unittest.TestCase):
         self.assertFalse(any('match="device"' in t["expr"] for p in panels for t in p["targets"]))
         # the other dashboards keep the usual 6 hour default
         others = [d["time"]["from"] for n, d in build.build().items()
-                  if n not in ("mist-wireless.json", "aruba-wireless.json")]
+                  if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json")]
         self.assertEqual(set(others), {"now-6h"})
 
     def test_no_panel_overlap(self):
