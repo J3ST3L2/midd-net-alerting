@@ -506,7 +506,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Campus-wide, Mist and Aruba together. Operating systems are folded into one short list; 'Unknown' is a device the network could not identify.",
+      "description": "Campus-wide, Mist and Aruba together, folded into one short list; 'Unknown' is a device the network could not identify. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -558,7 +558,7 @@
           "refId": "A"
         }
       ],
-      "title": "Operating systems on PantherNet",
+      "title": "Device types on PantherNet (best guess)",
       "type": "bargauge"
     },
     {
@@ -566,7 +566,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "The same view for the old network: which kinds of device have not moved yet.",
+      "description": "The same view for the old network: which kinds of device have not moved yet. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -618,7 +618,7 @@
           "refId": "A"
         }
       ],
-      "title": "Operating systems on MiddleburyCollege",
+      "title": "Device types on MiddleburyCollege (best guess)",
       "type": "bargauge"
     },
     {
@@ -626,7 +626,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "For each operating system, the percentage of its devices that are on PantherNet rather than MiddleburyCollege. A short bar is where adoption is lagging.",
+      "description": "For each device type, the percentage of its devices that are on PantherNet rather than MiddleburyCollege. A short bar is where adoption is lagging. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -649,7 +649,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 24,
+        "w": 18,
         "x": 0,
         "y": 22
       },
@@ -679,8 +679,136 @@
           "refId": "A"
         }
       ],
-      "title": "PantherNet share by operating system",
+      "title": "PantherNet share by device type (best guess)",
       "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "The share of devices on PantherNet or MiddleburyCollege whose type is 'Unknown'. The higher this is, the less the device-type charts can be trusted. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 22
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum({__name__=~\"aruba_ssid_os_clients|mist_ssid_os_clients\", ssid=~\"PantherNet|MiddleburyCollege\", os=\"Unknown\"}) / sum({__name__=~\"aruba_ssid_os_clients|mist_ssid_os_clients\", ssid=~\"PantherNet|MiddleburyCollege\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Devices the network could not identify",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "The adoption percentage counting only devices whose type is known. If it is close to the headline share, the unidentified devices are not skewing the result.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 26
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum({__name__=~\"aruba_ssid_os_clients|mist_ssid_os_clients\", ssid=\"PantherNet\", os!=\"Unknown\"}) / sum({__name__=~\"aruba_ssid_os_clients|mist_ssid_os_clients\", ssid=~\"PantherNet|MiddleburyCollege\", os!=\"Unknown\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "PantherNet share, identified devices only",
+      "type": "stat"
     },
     {
       "collapsed": false,
@@ -690,7 +818,403 @@
         "x": 0,
         "y": 31
       },
-      "id": 11,
+      "id": 13,
+      "panels": [],
+      "title": "BYOD and managed devices on PantherNet",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Aruba buildings only, right now: PantherNet devices the controller gave the BYOD role (personal devices). The Mist buildings are not split this way yet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "BYOD devices",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Aruba buildings only, right now: PantherNet devices the controller gave the Managed role (college-managed devices).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 32
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Managed devices",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed. Aruba buildings only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) / sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Managed share",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "PantherNet devices on the Aruba side with neither role, for example a device still signing in (role 'logon').",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(aruba_clients{ssid=\"PantherNet\"}) - sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Not classified",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Devices on PantherNet by role, over time. Aruba buildings only. It is a snapshot of who is connected, so it follows the school day.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"})",
+          "format": "time_series",
+          "legendFormat": "BYOD",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"})",
+          "format": "time_series",
+          "legendFormat": "Managed",
+          "refId": "B"
+        }
+      ],
+      "title": "BYOD and managed devices over time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "The percentage of classified PantherNet devices that are managed. Aruba buildings only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) / sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "format": "time_series",
+          "legendFormat": "Managed share",
+          "refId": "A"
+        }
+      ],
+      "title": "Managed share over time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 20,
       "panels": [],
       "title": "Sign-in problems and overlap",
       "type": "row"
@@ -729,9 +1253,9 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 32
+        "y": 45
       },
-      "id": 12,
+      "id": 21,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -798,9 +1322,9 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 32
+        "y": 45
       },
-      "id": 13,
+      "id": 22,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -858,9 +1382,9 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 32
+        "y": 45
       },
-      "id": 14,
+      "id": 23,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -926,9 +1450,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 32
+        "y": 45
       },
-      "id": 15,
+      "id": 24,
       "options": {
         "colorMode": "background",
         "graphMode": "none",

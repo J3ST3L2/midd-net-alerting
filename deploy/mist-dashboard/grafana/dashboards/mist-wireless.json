@@ -1666,7 +1666,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify.",
+      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1718,7 +1718,7 @@
           "refId": "A"
         }
       ],
-      "title": "Operating systems on PantherNet",
+      "title": "Device types on PantherNet (best guess)",
       "type": "bargauge"
     },
     {
@@ -1726,7 +1726,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify. The old network: which kinds of device have not moved yet.",
+      "description": "Mist buildings only: devices seen in the last 30 minutes, by operating system. Versions are folded into one short list; 'Unknown' is a device Mist could not identify. This is the network's best guess, read from how each device introduces itself (DHCP and browser fingerprints). It is reliable for the broad family, weak for versions, and blind to devices that hide themselves (private Wi-Fi addresses, very new releases), which show as Unknown. Read it as a trend and a rough mix, not an exact inventory. The old network: which kinds of device have not moved yet.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1778,7 +1778,7 @@
           "refId": "A"
         }
       ],
-      "title": "Operating systems on MiddleburyCollege",
+      "title": "Device types on MiddleburyCollege (best guess)",
       "type": "bargauge"
     }
   ],
