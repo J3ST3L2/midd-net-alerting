@@ -120,8 +120,8 @@ class Persistence(unittest.TestCase):
         client = Clients(*scenario())
         client.fails.append({"mac": "aa0000000001", "timestamp": NOW - 4000, "reason_code": 23,
                              "status_code": 0, "text": ""})      # user A fails again, later than the cached lookup
-        run_slice(t, client, self.config, NOW + 7000)
-        run_slice(t, client, self.config, NOW + 7000)
+        run_slice(t, client, self.config, NOW + 7300)             # past the refresh interval
+        run_slice(t, client, self.config, NOW + 7300)
         run_until_complete(t, client, self.config)
         self.assertEqual(metric(t.families(), "mist_pn_fallback_eligible_clients", match="user"), 3.0)
 

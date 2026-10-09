@@ -184,6 +184,13 @@ Metrics: `mist_pn_unique_clients{ssid}`, `mist_pn_auth_failure_events`, `mist_pn
 `mist_pn_lookups_pending{stage}`, `mist_pn_fallback_window_seconds`, `mist_pn_backfill_complete`.
 `mist_exporter_*` metrics include `source="fallback"`.
 
+**When History reads Loaded.** Every user with a failure old enough to judge has had their MiddleburyCollege
+connections looked up once. After that a user is only re-checked when the lookup is more than 2 hours old and a
+newer failure has since matured (`MC_REFRESH_MIN_S` in `pn_fallback.py`). A device that cannot sign in fails all
+day, so without this spacing its user would be re-queued every few minutes and the history would never finish.
+Until the refresh, a lookup keeps judging every failure it already covers; only the newest failures wait. The
+*Lookups pending* chart can therefore stay above zero for the refresh work while History reads Loaded.
+
 ## Lookup cache (so a restart does not reload for hours)
 
 The PantherNet numbers need two kinds of Mist lookup that cost one call each: which **user** a failing
