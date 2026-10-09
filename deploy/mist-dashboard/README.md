@@ -20,6 +20,8 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
   - *Mist Wifi Troubleshooting*: Mist SLE scores per site (coverage, capacity, time to connect, roaming,
     throughput), the APs behind coverage and capacity problems, APs that dropped offline or rebooted,
     and band share. Start here for a "wifi is bad in building X" complaint.
+  - *Aruba Wireless*: the Aruba side of PantherNet adoption, read from the Aruba controllers: devices and
+    PantherNet share, people on both networks, roles, device types, bands, and controller health.
   - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
 - Only Grafana publishes a port, and only on loopback. Exporter and Prometheus are on a private
   Docker network.
@@ -37,6 +39,8 @@ sudo sh -c 'umask 077; printf "Mist read-only token: "; read -rs T; echo; printf
 sudo sh -c 'umask 077; printf "Grafana admin password: "; read -rs T; echo; printf %s "$T" > secrets/grafana-admin-password'
 sudo chmod 444 secrets/mist-api-token secrets/grafana-admin-password   # dir is 700, so root-only on the host
 sudo sh -c 'umask 077; openssl rand -hex 32 > secrets/pn-cache-key' && sudo chmod 444 secrets/pn-cache-key   # lookup cache key, see "Lookup cache"
+
+sudo install -m 600 /dev/null secrets/aruba-password && sudo chmod 444 secrets/aruba-password   # empty = Aruba off, see "Aruba controllers"
 
 sudo docker compose config >/dev/null        # validates .env and secrets
 sudo docker compose up -d --build
@@ -202,6 +206,43 @@ sudo docker compose stop exporter && sudo docker volume rm mist-dashboard_export
 
 A database error (disk full, corrupt file) switches the cache off with one log line and the exporter carries on
 in memory; it never stops the exporter.
+
+## Aruba controllers (Aruba Wireless dashboard)
+
+The exporter can read the Aruba side of the campus from the controllers' own REST API, so PantherNet adoption
+covers both Mist and Aruba. It is read-only and needs no changes on the Aruba side beyond one account.
+
+**What it does.** Every 2 minutes it logs in to each managed controller (port 4343), runs `show user-table`,
+reduces the answer to counts (per SSID, role, device type, band, controller) and logs out. Usernames are used
+only to count distinct people, and how many are on both PantherNet and MiddleburyCollege; they stay in memory
+for that one refresh and are never exported, logged or written to disk.
+
+**The account.** In the Mobility Conductor UI, select **Managed Network** (not Mobility Conductor), then
+*Configuration > System > Admin > Management Users*, add a user with the **read-only** role, and
+*Pending Changes > Deploy Changes*. It has to be on the Managed Network node (`/md`): an account on the Conductor
+node (`/mm`) exists on the Conductor only, and the controllers answer 401. The Conductor itself holds no clients.
+
+```bash
+sudo sh -c 'umask 077; printf "Aruba read-only password: "; read -rs T; echo; printf %s "$T" > secrets/aruba-password'
+sudo chmod 444 secrets/aruba-password
+nano .env        # ARUBA_CONTROLLERS=amc01.example.edu,amc02.example.edu,...   (managed controllers only)
+sudo docker compose up -d
+sudo docker compose logs exporter | grep -i aruba    # "aruba poll failed" names a controller that did not answer
+```
+
+The controllers present self-signed certificates, so the exporter does not verify them by default; set
+`ARUBA_CA_FILE` to a CA bundle to verify. The exporter must be able to reach each controller on 4343. A controller
+that cannot be reached keeps its last count for 3 poll intervals, then drops out and shows as *Reachable: No*.
+
+**Metrics:** `aruba_clients{ssid}`, `aruba_controller_clients{controller,ssid}`, `aruba_ssid_role_clients{ssid,role}`,
+`aruba_ssid_device_clients{ssid,device_type}`, `aruba_ssid_band_clients{ssid,band}`, `aruba_ssid_auth_clients{ssid,auth}`,
+`aruba_ssid_people{ssid}`, `aruba_people_on_both_ssids`, `aruba_controller_up{controller}`,
+`aruba_controller_users`, `aruba_controller_poll_seconds`, `aruba_controller_data_age_seconds`.
+`mist_exporter_*` metrics include `source="aruba"`.
+
+**Not on this dashboard.** Sign-in *failures* and fallback per person. The controller's user table only lists who is
+connected right now, so it shows adoption (who is on which network) but not who failed first. *People on both
+networks* is the closest proxy.
 
 ## Known limits
 

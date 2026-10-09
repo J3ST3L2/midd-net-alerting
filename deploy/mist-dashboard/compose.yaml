@@ -37,9 +37,15 @@ services:
       FALLBACK_PAGES_PER_SLICE: ${FALLBACK_PAGES_PER_SLICE:-16}
       FALLBACK_LOOKUPS_PER_SLICE: ${FALLBACK_LOOKUPS_PER_SLICE:-24}
       MC_EVENT_TYPE: ${MC_EVENT_TYPE:-CLIENT_AUTH_ASSOCIATION}
+      # Aruba controllers, read-only (see README "Aruba controllers"). Off while the list or the password is empty.
+      ARUBA_CONTROLLERS: ${ARUBA_CONTROLLERS:-}
+      ARUBA_USER: ${ARUBA_USER:-grafana-ro}
+      ARUBA_PASSWORD_FILE: /run/secrets/aruba_password
+      ARUBA_INTERVAL_S: ${ARUBA_INTERVAL_S:-120}
     secrets:
       - mist_api_token
       - pn_cache_key
+      - aruba_password
     volumes:
       - exporter-state:/state
     networks:
@@ -128,5 +134,7 @@ secrets:
     file: ./secrets/mist-api-token
   pn_cache_key:
     file: ./secrets/pn-cache-key
+  aruba_password:
+    file: ./secrets/aruba-password          # empty file = Aruba polling off
   grafana_admin_password:
     file: ./secrets/grafana-admin-password

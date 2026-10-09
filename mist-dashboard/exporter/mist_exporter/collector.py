@@ -8,13 +8,14 @@ import logging
 import threading
 import time
 
-from . import pn_fallback
-from .metrics import Family, alarm_families, device_families, render, site_ap_families, sle_families, wireless_families
+from . import aruba, pn_fallback
+from .metrics import (Family, alarm_families, aruba_families, device_families, render, site_ap_families,
+                      sle_families, wireless_families)
 from .mist_api import MistError
 
 log = logging.getLogger("mist_exporter")
 
-SOURCES = ("sites", "devices", "site_stats", "clients", "sle", "alarms", "fallback")
+SOURCES = ("sites", "devices", "site_stats", "clients", "sle", "alarms", "fallback", "aruba")
 SLE_METRICS = ("coverage", "capacity", "time-to-connect", "roaming", "throughput")
 SLE_AP_METRICS = ("coverage", "capacity")   # per-AP detail only where it points at a fix
 
@@ -24,7 +25,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "sites": {}}, "sle": {}}
+                      "clients": {"ap": [], "sites": {}}, "sle": {}, "aruba": {}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -35,12 +36,19 @@ class Collector:
                                              cache_ttl_s=cfg.fallback_cache_ttl_h * 3600, now=clock())
         if not cfg.fallback_enabled:
             self._due["fallback"] = float("inf")
+        self._aruba = None
+        if cfg.aruba_controllers and cfg.aruba_password:
+            client = aruba.ArubaClient(cfg.aruba_user, cfg.aruba_password, cfg.aruba_timeout, cfg.aruba_ca_file)
+            self._aruba = aruba.ArubaPoller(client, cfg.aruba_controllers, cfg.pn_ssid, cfg.mc_ssid,
+                                            cfg.aruba_interval, clock=clock)
+        else:
+            self._due["aruba"] = float("inf")
 
     def _interval(self, source):
         return {"sites": self.cfg.sites_interval, "devices": self.cfg.devices_interval,
                 "site_stats": self.cfg.clients_interval, "clients": self.cfg.clients_interval,
                 "sle": self.cfg.sle_interval,
-                "alarms": self.cfg.alarms_interval,
+                "alarms": self.cfg.alarms_interval, "aruba": self.cfg.aruba_interval,
                 # Every minute while there is queued work (history loading, lookups), else the steady interval.
                 "fallback": 60 if self._fallback.busy else self.cfg.fallback_interval}[source]
 
@@ -58,6 +66,8 @@ class Collector:
         if source == "fallback":
             pn_fallback.run_slice(self._fallback, self.client, self.cfg, int(self.clock()))
             return None
+        if source == "aruba":
+            return self._aruba.poll()
         now = int(self.clock())
         return self.client.search_alarms(now - self.cfg.alarm_window_hours * 3600, now)
 
@@ -140,9 +150,11 @@ class Collector:
             sites, devices, alarms = self._data["sites"], self._data["devices"], self._data["alarms"]
             site_stats, clients, sle = self._data["site_stats"], self._data["clients"], self._data["sle"]
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
+            aruba_data = self._data["aruba"]
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
-                    + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families())
+                    + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()
+                    + aruba_families(aruba_data))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",

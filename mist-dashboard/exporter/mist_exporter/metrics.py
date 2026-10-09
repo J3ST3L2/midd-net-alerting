@@ -179,6 +179,46 @@ def sle_families(sites, sle):
     return [users, aps, worst]
 
 
+def aruba_families(data):
+    """Aruba client counts from the controllers' user tables (see aruba.py); data is the poller's summary."""
+    def fam(name, help_, samples):
+        return Family(name, help_, "gauge", samples)
+
+    def per(table, *labels):
+        return [(dict(zip(labels, key)), float(n)) for key, n in sorted(table.items())]
+
+    def nested(table, label):
+        return [({"ssid": s, label: v}, float(n)) for s, inner in sorted(table.items()) for v, n in sorted(inner.items())]
+
+    ctrls = data.get("controllers", {})
+    return [
+        fam("aruba_clients", "Wireless clients per SSID, one per MAC across all controllers.",
+            per({(s,): n for s, n in data.get("clients", {}).items()}, "ssid")),
+        fam("aruba_controller_clients", "Wireless clients per controller and SSID.",
+            per(data.get("by_controller", {}), "controller", "ssid")),
+        fam("aruba_ssid_role_clients", "Clients per SSID and user role (the busiest roles; the rest are 'other').",
+            nested(data.get("roles", {}), "role")),
+        fam("aruba_ssid_device_clients", "Clients per SSID and device type the controller identified.",
+            nested(data.get("devices", {}), "device_type")),
+        fam("aruba_ssid_band_clients", "Clients per SSID and radio band.", per(data.get("bands", {}), "ssid", "band")),
+        fam("aruba_ssid_auth_clients", "Clients per SSID and authentication method.",
+            per(data.get("auth", {}), "ssid", "auth")),
+        fam("aruba_ssid_people", "Distinct usernames per SSID (a person with two devices counts once).",
+            per({(s,): n for s, n in data.get("people", {}).items()}, "ssid")),
+        fam("aruba_people_on_both_ssids",
+            "Distinct usernames connected to both PantherNet and MiddleburyCollege right now.",
+            [({}, float(data["people_on_both"]))] if "people_on_both" in data else []),
+        fam("aruba_controller_up", "1 if the controller answered the last poll.",
+            [({"controller": c}, s["up"]) for c, s in sorted(ctrls.items())]),
+        fam("aruba_controller_users", "Wireless users in the controller's table (from its last good poll).",
+            [({"controller": c}, s["clients"]) for c, s in sorted(ctrls.items()) if s.get("age") is not None]),
+        fam("aruba_controller_poll_seconds", "How long the controller took to answer the last poll.",
+            [({"controller": c}, s["seconds"]) for c, s in sorted(ctrls.items()) if s.get("seconds") is not None]),
+        fam("aruba_controller_data_age_seconds", "Age of the table being counted for the controller.",
+            [({"controller": c}, s["age"]) for c, s in sorted(ctrls.items()) if s.get("age") is not None]),
+    ]
+
+
 def alarm_families(alarms, sites):
     """Alarm records in the exporter's window, counted by site/severity/type/group/state."""
     counts = collections.Counter()
