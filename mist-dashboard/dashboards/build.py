@@ -278,6 +278,14 @@ def pn_adoption(y):
     overrides = p[2]["fieldConfig"]["overrides"]
     overrides.append({"matcher": {"id": "byName", "options": "Unique users"},
                       "properties": [{"id": "custom.axisPlacement", "value": "right"}]})
+    # Added after the trend note is applied: this one is progress, not a trailing-24-hour value.
+    p.append(timeseries("Lookups pending over time", 0, top + 24, 24, 6,
+                        [target("sum by (stage) (mist_pn_lookups_pending)", "{{stage}}")],
+                        "Work still queued for Mist lookups: 'username' is failing devices whose user is not yet "
+                        "known, 'connections' is users whose MiddleburyCollege connections are not yet checked. "
+                        "A falling line means the history is loading (about 24 lookups a minute); a flat line "
+                        "means it is stalled. It rises briefly as usernames resolve, because each one adds a "
+                        "connections lookup."))
     return p
 
 
