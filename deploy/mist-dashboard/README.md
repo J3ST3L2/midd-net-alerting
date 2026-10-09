@@ -242,6 +242,16 @@ sudo docker compose stop exporter && sudo docker volume rm mist-dashboard_export
 A database error (disk full, corrupt file) switches the cache off with one log line and the exporter carries on
 in memory; it never stops the exporter.
 
+## BYOD vs managed devices on PantherNet
+
+The *PantherNet Adoption* dashboard splits PantherNet devices into BYOD and Managed on both platforms. Aruba
+buildings use the role the controller gives the device ("BYOD Device", "Managed Device"). Mist buildings have no
+role, but the two groups land on different VLANs, so the exporter counts Mist clients per VLAN
+(`clients/count?distinct=vlan`) and maps them with `PN_BYOD_VLANS` and `PN_MANAGED_VLANS` in `.env`
+(`mist_pn_group_clients{group}`: BYOD, Managed, Other). The VLAN numbers stay in `.env`, not in Git. Leave them
+blank and the Mist side of the split is off. Check the mapping against the ClearPass or switch configuration
+before quoting the numbers: a wrong VLAN assignment would swap the groups.
+
 ## Operating systems and the campus-wide view
 
 Mist reports an OS per client (`clients/count?distinct=os`, queried once per adoption SSID each minute) and the

@@ -143,6 +143,22 @@ def mist_os_families(os_by_ssid):
     return [fam]
 
 
+def mist_group_families(vlan_rows, byod_vlans, managed_vlans):
+    """PantherNet clients on the Mist side split BYOD / Managed / Other by the VLAN they landed on
+    (clients/count?distinct=vlan). Off (no samples) until the two VLAN lists are configured."""
+    fam = Family("mist_pn_group_clients", "Mist clients on PantherNet by device group, from their VLAN.", "gauge", [])
+    if not (byod_vlans or managed_vlans):
+        return [fam]
+    counts = collections.Counter()
+    for r in vlan_rows:
+        n, vlan = _num(r.get("count")), str(r.get("last_vlan", r.get("vlan", ""))).strip()
+        if n is None or not vlan:
+            continue
+        counts["BYOD" if vlan in byod_vlans else "Managed" if vlan in managed_vlans else "Other"] += n
+    fam.samples.extend(({"group": g}, counts[g]) for g in ("BYOD", "Managed", "Other"))
+    return [fam]
+
+
 def site_ap_families(site_stats):
     """AP counts per site with the site's GPS position as labels, for map panels. Sites without
     coordinates (or with 0/0 placeholders) are skipped: a wrong pin is worse than a missing one."""

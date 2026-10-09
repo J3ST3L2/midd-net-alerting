@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from mist_exporter.aruba import summarize  # noqa: E402
 from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
-from mist_exporter.metrics import mist_os_families  # noqa: E402
+from mist_exporter.metrics import mist_group_families, mist_os_families  # noqa: E402
 from mist_exporter.mist_api import MistError  # noqa: E402
 from mist_exporter.osfamily import FAMILIES, os_family  # noqa: E402
 
@@ -62,6 +62,47 @@ class MistSide(unittest.TestCase):
         text = c.render()
         self.assertIn('mist_ap_clients{', text)
         self.assertNotIn("mist_ssid_os_clients{", text)
+
+
+class VlanGroups(unittest.TestCase):
+    ROWS = [{"last_vlan": "302", "count": 1471}, {"last_vlan": "301", "count": 288}, {"last_vlan": "999", "count": 5},
+            {"last_vlan": "", "count": 3}, {"count": 4}]
+
+    def test_vlans_map_to_groups(self):
+        fams = mist_group_families(self.ROWS, ("302",), ("301",))
+        got = {l["group"]: v for l, v in fams[0].samples}
+        self.assertEqual(got, {"BYOD": 1471.0, "Managed": 288.0, "Other": 5.0})
+
+    def test_off_until_configured(self):
+        self.assertEqual(mist_group_families(self.ROWS, (), ())[0].samples, [])
+
+    def test_collector_queries_vlans_only_when_configured_and_survives_failure(self):
+        calls = []
+        client = FakeClient()
+        original = client.client_counts
+
+        def counts(distinct, duration, site_id=None, ssid=None):
+            if distinct == "vlan":
+                calls.append(ssid)
+                return [{"last_vlan": "302", "count": 7}, {"last_vlan": "301", "count": 3}]
+            return original(distinct, duration, site_id, ssid)
+        client.client_counts = counts
+        off = Collector(Config(devices_interval=60), client, Clock())
+        off.run_due()
+        self.assertEqual(calls, [])
+        on = Collector(Config(devices_interval=60, pn_byod_vlans=("302",), pn_managed_vlans=("301",)), client, Clock())
+        on.run_due()
+        self.assertEqual(calls, ["PantherNet"])
+        self.assertIn('mist_pn_group_clients{group="BYOD"} 7', on.render())
+
+        def broken(distinct, duration, site_id=None, ssid=None):
+            if distinct == "vlan":
+                raise MistError("Mist HTTP 400", status=400)
+            return original(distinct, duration, site_id, ssid)
+        client.client_counts = broken
+        again = Collector(Config(devices_interval=60, pn_byod_vlans=("302",)), client, Clock())
+        again.run_due()
+        self.assertIn("mist_ap_clients{", again.render())
 
 
 class ArubaSide(unittest.TestCase):

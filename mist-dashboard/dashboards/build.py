@@ -697,6 +697,16 @@ OS_CAVEAT = (" This is the network's best guess, read from how each device intro
 OS_METRICS = '__name__=~"aruba_ssid_os_clients|mist_ssid_os_clients"'
 
 
+A_BYOD = 'sum(aruba_ssid_role_clients{ssid="PantherNet", role="BYOD Device"})'
+A_MAN = 'sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"})'
+M_BYOD = 'sum(mist_pn_group_clients{group="BYOD"})'
+M_MAN = 'sum(mist_pn_group_clients{group="Managed"})'
+CAMPUS_BYOD = "(%s + %s)" % (_z(A_BYOD), _z(M_BYOD))
+CAMPUS_MAN = "(%s + %s)" % (_z(A_MAN), _z(M_MAN))
+BYOD_NOTE = ("A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; "
+             "devices on neither are left out.")
+
+
 def pn_campus_view():
     pn_os = 'sum by (os) ({%s, ssid="PantherNet"})' % OS_METRICS
     all_os = 'sum by (os) ({%s, ssid=~"PantherNet|MiddleburyCollege"})' % OS_METRICS
@@ -749,35 +759,29 @@ def pn_campus_view():
              "share, the unidentified devices are not skewing the result.", unit="percent"),
 
         row("BYOD and managed devices on PantherNet", 31),
-        stat("BYOD devices", 0, 32, 6,
-             'sum(aruba_ssid_role_clients{ssid="PantherNet", role="BYOD Device"}) or vector(0)',
-             "Aruba buildings only, right now: PantherNet devices the controller gave the BYOD role (personal "
-             "devices). The Mist buildings are not split this way yet."),
-        stat("Managed devices", 6, 32, 6,
-             'sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"}) or vector(0)',
-             "Aruba buildings only, right now: PantherNet devices the controller gave the Managed role "
-             "(college-managed devices)."),
-        stat("Managed share", 12, 32, 6,
-             '100 * sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"}) / '
-             'sum(aruba_ssid_role_clients{ssid="PantherNet", role=~"BYOD Device|Managed Device"})',
-             "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed. "
-             "Aruba buildings only.", unit="percent"),
-        stat("Not classified", 18, 32, 6,
-             'sum(aruba_clients{ssid="PantherNet"}) - sum(aruba_ssid_role_clients{ssid="PantherNet", '
-             'role=~"BYOD Device|Managed Device"})',
-             "PantherNet devices on the Aruba side with neither role, for example a device still signing in "
-             "(role 'logon')."),
+        stat("BYOD devices", 0, 32, 5, CAMPUS_BYOD,
+             "Campus-wide, right now: PantherNet devices that are personal (BYOD). Mist buildings are counted by "
+             "the VLAN the device landed on, Aruba buildings by the role the controller gave it. " + BYOD_NOTE),
+        stat("Managed devices", 5, 32, 5, CAMPUS_MAN,
+             "Campus-wide, right now: PantherNet devices that are college-managed, counted the same way. "
+             + BYOD_NOTE),
+        stat("Managed share", 10, 32, 5, "100 * %s / (%s + %s)" % (CAMPUS_MAN, CAMPUS_BYOD, CAMPUS_MAN),
+             "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed, Mist and "
+             "Aruba together.", unit="percent"),
+        stat("Mist side", 15, 32, 4, "100 * %s / (%s + %s)" % (_z(M_MAN), _z(M_BYOD), _z(M_MAN)),
+             "The managed share for the Mist buildings only.", unit="percent"),
+        stat("Aruba side", 19, 32, 5, "100 * %s / (%s + %s)" % (_z(A_MAN), _z(A_BYOD), _z(A_MAN)),
+             "The managed share for the Aruba buildings only.", unit="percent"),
         timeseries("BYOD and managed devices over time", 0, 36, 12, 8,
-                   [target('sum(aruba_ssid_role_clients{ssid="PantherNet", role="BYOD Device"})', "BYOD"),
-                    target('sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"})', "Managed",
-                           ref="B")],
-                   "Devices on PantherNet by role, over time. Aruba buildings only. It is a snapshot of who is "
-                   "connected, so it follows the school day."),
+                   [target(M_BYOD, "BYOD - Mist"), target(A_BYOD, "BYOD - Aruba", ref="B"),
+                    target(M_MAN, "Managed - Mist", ref="C"), target(A_MAN, "Managed - Aruba", ref="D")],
+                   "PantherNet devices by group, on each platform. It is a snapshot of who is connected, so it "
+                   "follows the school day. " + BYOD_NOTE),
         timeseries("Managed share over time", 12, 36, 12, 8,
-                   [target('100 * sum(aruba_ssid_role_clients{ssid="PantherNet", role="Managed Device"}) / '
-                           'sum(aruba_ssid_role_clients{ssid="PantherNet", role=~"BYOD Device|Managed Device"})',
-                           "Managed share")],
-                   "The percentage of classified PantherNet devices that are managed. Aruba buildings only.",
+                   [target("100 * %s / (%s + %s)" % (CAMPUS_MAN, CAMPUS_BYOD, CAMPUS_MAN), "Campus"),
+                    target("100 * %s / (%s + %s)" % (_z(M_MAN), _z(M_BYOD), _z(M_MAN)), "Mist side", ref="B"),
+                    target("100 * %s / (%s + %s)" % (_z(A_MAN), _z(A_BYOD), _z(A_MAN)), "Aruba side", ref="C")],
+                   "The percentage of classified PantherNet devices that are managed. " + BYOD_NOTE,
                    unit="percent", min_=None),
 
         row("Sign-in problems and overlap", 44),

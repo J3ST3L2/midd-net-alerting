@@ -828,7 +828,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Aruba buildings only, right now: PantherNet devices the controller gave the BYOD role (personal devices). The Mist buildings are not split this way yet.",
+      "description": "Campus-wide, right now: PantherNet devices that are personal (BYOD). Mist buildings are counted by the VLAN the device landed on, Aruba buildings by the role the controller gave it. A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; devices on neither are left out.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -850,7 +850,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 32
       },
@@ -873,7 +873,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)",
+          "expr": "((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"BYOD\"}) or vector(0)))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -888,7 +888,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Aruba buildings only, right now: PantherNet devices the controller gave the Managed role (college-managed devices).",
+      "description": "Campus-wide, right now: PantherNet devices that are college-managed, counted the same way. A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; devices on neither are left out.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -910,8 +910,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 5,
         "y": 32
       },
       "id": 15,
@@ -933,7 +933,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)",
+          "expr": "((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0)))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -948,7 +948,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed. Aruba buildings only.",
+      "description": "Of the PantherNet devices classified as BYOD or Managed, the percentage that are Managed, Mist and Aruba together.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -970,8 +970,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 32
       },
       "id": 16,
@@ -993,7 +993,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) / sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "expr": "100 * ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0))) / (((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"BYOD\"}) or vector(0))) + ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0))))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -1008,7 +1008,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "PantherNet devices on the Aruba side with neither role, for example a device still signing in (role 'logon').",
+      "description": "The managed share for the Mist buildings only.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1024,14 +1024,14 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 15,
         "y": 32
       },
       "id": 17,
@@ -1053,14 +1053,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(aruba_clients{ssid=\"PantherNet\"}) - sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "expr": "100 * (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0)) / ((sum(mist_pn_group_clients{group=\"BYOD\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0)))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Not classified",
+      "title": "Mist side",
       "type": "stat"
     },
     {
@@ -1068,7 +1068,67 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Devices on PantherNet by role, over time. Aruba buildings only. It is a snapshot of who is connected, so it follows the school day.",
+      "description": "The managed share for the Aruba buildings only.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 32
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) / ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)) + (sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)))",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Aruba side",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "PantherNet devices by group, on each platform. It is a snapshot of who is connected, so it follows the school day. A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; devices on neither are left out.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1103,7 +1163,7 @@
         "x": 0,
         "y": 36
       },
-      "id": 18,
+      "id": 19,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1121,10 +1181,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
+          "expr": "sum(mist_pn_group_clients{group=\"BYOD\"})",
+          "format": "time_series",
+          "legendFormat": "BYOD - Mist",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"})",
           "format": "time_series",
-          "legendFormat": "BYOD",
-          "refId": "A"
+          "legendFormat": "BYOD - Aruba",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(mist_pn_group_clients{group=\"Managed\"})",
+          "format": "time_series",
+          "legendFormat": "Managed - Mist",
+          "refId": "C"
         },
         {
           "datasource": {
@@ -1133,8 +1213,8 @@
           },
           "expr": "sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"})",
           "format": "time_series",
-          "legendFormat": "Managed",
-          "refId": "B"
+          "legendFormat": "Managed - Aruba",
+          "refId": "D"
         }
       ],
       "title": "BYOD and managed devices over time",
@@ -1145,7 +1225,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "The percentage of classified PantherNet devices that are managed. Aruba buildings only.",
+      "description": "The percentage of classified PantherNet devices that are managed. A device is BYOD or Managed by the VLAN (Mist) or role (Aruba) the network placed it in at sign-in; devices on neither are left out.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1179,7 +1259,7 @@
         "x": 12,
         "y": 36
       },
-      "id": 19,
+      "id": 20,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1197,10 +1277,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "100 * sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) / sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=~\"BYOD Device|Managed Device\"})",
+          "expr": "100 * ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0))) / (((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"BYOD\"}) or vector(0))) + ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0))))",
           "format": "time_series",
-          "legendFormat": "Managed share",
+          "legendFormat": "Campus",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0)) / ((sum(mist_pn_group_clients{group=\"BYOD\"}) or vector(0)) + (sum(mist_pn_group_clients{group=\"Managed\"}) or vector(0)))",
+          "format": "time_series",
+          "legendFormat": "Mist side",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)) / ((sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"BYOD Device\"}) or vector(0)) + (sum(aruba_ssid_role_clients{ssid=\"PantherNet\", role=\"Managed Device\"}) or vector(0)))",
+          "format": "time_series",
+          "legendFormat": "Aruba side",
+          "refId": "C"
         }
       ],
       "title": "Managed share over time",
@@ -1214,7 +1314,7 @@
         "x": 0,
         "y": 44
       },
-      "id": 20,
+      "id": 21,
       "panels": [],
       "title": "Sign-in problems and overlap",
       "type": "row"
@@ -1255,7 +1355,7 @@
         "x": 0,
         "y": 45
       },
-      "id": 21,
+      "id": 22,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -1324,7 +1424,7 @@
         "x": 6,
         "y": 45
       },
-      "id": 22,
+      "id": 23,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -1384,7 +1484,7 @@
         "x": 12,
         "y": 45
       },
-      "id": 23,
+      "id": 24,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -1452,7 +1552,7 @@
         "x": 18,
         "y": 45
       },
-      "id": 24,
+      "id": 25,
       "options": {
         "colorMode": "background",
         "graphMode": "none",

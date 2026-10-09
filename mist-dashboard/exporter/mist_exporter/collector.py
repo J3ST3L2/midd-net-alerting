@@ -9,8 +9,8 @@ import threading
 import time
 
 from . import aruba, pn_fallback
-from .metrics import (Family, alarm_families, aruba_families, device_families, mist_os_families, render,
-                      site_ap_families, sle_families, wireless_families)
+from .metrics import (Family, alarm_families, aruba_families, device_families, mist_group_families,
+                      mist_os_families, render, site_ap_families, sle_families, wireless_families)
 from .mist_api import MistError
 
 log = logging.getLogger("mist_exporter")
@@ -25,7 +25,7 @@ class Collector:
         self.cfg, self.client, self.clock = cfg, client, clock
         self._lock = threading.Lock()
         self._data = {"sites": {}, "devices": [], "alarms": [], "site_stats": [],
-                      "clients": {"ap": [], "sites": {}, "os": {}}, "sle": {}, "aruba": {}}
+                      "clients": {"ap": [], "sites": {}, "os": {}, "vlan": []}, "sle": {}, "aruba": {}}
         self._ok = {}                        # source -> unix time of last success
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
@@ -79,7 +79,17 @@ class Collector:
         return {"ap": self.client.client_counts("ap", win),
                 "sites": {sid: {d: self.client.client_counts(d, win, site_id=sid) for d in ("band", "ssid")}
                           for sid in active},
-                "os": self._fetch_os(win)}
+                "os": self._fetch_os(win), "vlan": self._fetch_vlan(win)}
+
+    def _fetch_vlan(self, win):
+        """PantherNet clients per VLAN, only when the BYOD/managed VLANs are configured. Skipped on failure."""
+        if not (self.cfg.pn_byod_vlans or self.cfg.pn_managed_vlans):
+            return []
+        try:
+            return self.client.client_counts("vlan", win, ssid=self.cfg.pn_ssid)
+        except MistError as e:
+            log.warning("client VLAN counts failed: %s", e)
+            return []
 
     def _fetch_os(self, win):
         """Operating systems on the two adoption SSIDs. A failure here is skipped, not fatal to the other counts."""
@@ -165,7 +175,10 @@ class Collector:
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
                     + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()
-                    + mist_os_families(clients.get("os", {})) + aruba_families(aruba_data))
+                    + mist_os_families(clients.get("os", {}))
+                    + mist_group_families(clients.get("vlan", []), self.cfg.pn_byod_vlans,
+                                          self.cfg.pn_managed_vlans)
+                    + aruba_families(aruba_data))
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",
