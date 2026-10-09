@@ -262,6 +262,58 @@ class EndToEnd(unittest.TestCase):
                            + metric(t.families(), "mist_pn_lookups_pending", stage="connections"), 0)
 
 
+class ChurningFailures(unittest.TestCase):
+    """A device that cannot sign in fails all day; its user must not keep the history 'loading' for ever."""
+
+    def setUp(self):
+        self.client = Clients(*scenario())
+        self.t = Tracker(1800, 24 * 3600, PN, MC, now=NOW)
+        self.config = cfg()
+
+    def test_a_user_with_ongoing_failures_does_not_hold_back_loaded(self):
+        run_until_complete(self.t, self.client, self.config)
+        # user A keeps failing: a fresh failure matures after the lookup, 10 minutes later
+        self.client.fails.append(ev("aa0000000001", NOW - 1500, 23))
+        later = NOW + 600 + 1800
+        for _ in range(6):
+            run_slice(self.t, self.client, self.config, later)
+        self.assertTrue(self.t.complete)                                  # still Loaded
+        first, refresh = self.t._mc_queue(later)
+        self.assertEqual(first, [])
+        self.assertEqual(refresh, [])                                     # too soon to look A up again
+
+    def test_a_refresh_happens_once_the_lookup_is_old_enough(self):
+        run_until_complete(self.t, self.client, self.config)
+        self.client.fails.append(ev("aa0000000001", NOW - 1500, 23))
+        later = NOW + 8000
+        for _ in range(6):
+            run_slice(self.t, self.client, self.config, later)
+        _, refresh = self.t._mc_queue(later)
+        self.assertEqual(refresh, [])                                     # refreshed, so nothing left to do
+        self.assertTrue(self.t.complete)
+
+    def test_a_stale_lookup_still_judges_the_failures_it_covers(self):
+        run_until_complete(self.t, self.client, self.config)
+        before = metric(self.t.families(), "mist_pn_fallback_eligible_clients", match="user")
+        self.client.fails.append(ev("aa0000000001", NOW - 1500, 23))     # newer failure, not yet covered
+        later = NOW + 600 + 1800
+        for _ in range(6):
+            run_slice(self.t, self.client, self.config, later)
+        after = metric(self.t.families(), "mist_pn_fallback_eligible_clients", match="user")
+        self.assertEqual(after, before + 1)       # user C's failure matured meanwhile; A stays eligible, not dropped
+
+    def test_first_lookups_come_before_refreshes(self):
+        run_until_complete(self.t, self.client, self.config)
+        self.client.fails.append(ev("aa0000000001", NOW - 1500, 23))
+        self.client.fails.append(ev("gg0000000008", NOW - 1000, 23))
+        self.client.rows.append(row("gg0000000008", ["zz-g"], "iOS", "iPhone 12", PN))
+        later = NOW + 8000
+        run_slice(self.t, self.client, self.config, later)
+        run_slice(self.t, self.client, self.config, later)
+        first, _ = self.t._mc_queue(later)
+        self.assertEqual(first, [])
+
+
 class Privacy(unittest.TestCase):
     def test_exported_text_contains_no_usernames_or_macs(self):
         t = Tracker(WINDOW, 86400, PN, MC)

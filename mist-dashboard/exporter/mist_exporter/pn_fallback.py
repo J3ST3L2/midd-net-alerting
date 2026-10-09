@@ -35,6 +35,7 @@ OVERLAP_S = 60                 # incremental passes re-read this far back, de-du
 REASONS = ("dot1x_failed", "handshake_timeout", "previous_auth_invalid", "client_left", "tx_failure", "other")
 COUNTED = frozenset({"dot1x_failed", "handshake_timeout"})
 MAX_NAMES = 4                  # Mist lists 1-4 usernames per client
+MC_REFRESH_MIN_S = 7200        # a user already looked up is re-checked at most this often
 # Counts rebuilt from event history. After a restart they are partial until the history has loaded, so
 # they are withheld until then: a restart must not draw a false dip into a weeks-long trend.
 PARTIAL_WHILE_LOADING = frozenset({
@@ -321,19 +322,31 @@ class Tracker:
                 users[ident["key"]].append((ts, ident["os"], ident["model"]))
         return users
 
-    def pending_mc_users(self, now):
-        """Users with a matured failure whose MiddleburyCollege connections are not yet fetched (or were
-        fetched before the failure's window closed). Returns [(user hash, raw usernames or [])]; the names
-        are empty for a user known only from the cache, and run_slice then looks them up again."""
-        out = []
+    def _mc_queue(self, now):
+        """(first, refresh): users whose MiddleburyCollege connections are queued.
+        first: a matured failure and no lookup at all yet. These are what "loaded" waits for.
+        refresh: looked up before a newer failure's window closed, and the lookup is at least MC_REFRESH_MIN_S old.
+        A device that cannot sign in fails all day, so its user always has a newer failure; refreshing on every
+        one would keep them queued for good. A lookup keeps judging the failures it covers meanwhile."""
+        first, refresh = [], []
         for key, fails in self._failures_by_user().items():
             mature = [f[0] for f in fails if f[0] <= now - self.window_s]
             if not mature:
                 continue
             have = self._mc.get(key)
-            if have is None or have["at"] < max(mature) + self.window_s:
-                out.append((max(mature), key, self._names.get(key, [])))
-        return [(k, names) for _, k, names in sorted(out, reverse=True)]
+            if have is None:
+                first.append((max(mature), key, self._names.get(key, [])))
+            elif have["at"] < max(mature) + self.window_s and now - have["at"] >= MC_REFRESH_MIN_S:
+                refresh.append((have["at"], key, self._names.get(key, [])))
+        first.sort(reverse=True)
+        refresh.sort()
+        return first, refresh
+
+    def pending_mc_users(self, now):
+        """Users to look up, first-time lookups before refreshes. Returns [(user hash, raw usernames or [])];
+        the names are empty for a user known only from the cache, and run_slice then looks them up again."""
+        first, refresh = self._mc_queue(now)
+        return [(k, names) for _, k, names in first + refresh]
 
     def raw_mac_for_user(self, user_h):
         """A raw MAC from this window's failures whose cached identity belongs to this user."""
@@ -368,9 +381,13 @@ class Tracker:
         """(eligible, fallback) per match kind over users with a matured, fully looked-up failure."""
         res = {"user": [0, 0], "device": [0, 0]}
         for key, fails in self._failures_by_user().items():
-            mature = [f for f in fails if f[0] <= now - self.window_s]
             have = self._mc.get(key)
-            if not mature or have is None or have["at"] < max(f[0] for f in mature) + self.window_s:
+            if have is None:
+                continue
+            # Judge the failures the lookup covers (its window had closed by the time it ran); newer ones wait
+            # for the next refresh instead of holding the whole user back.
+            mature = [f for f in fails if f[0] <= now - self.window_s and f[0] + self.window_s <= have["at"]]
+            if not mature:
                 continue
             hit_user = hit_device = False
             for ts, os_, model in mature:
@@ -395,9 +412,10 @@ class Tracker:
             users = self._failures_by_user()
             unresolved = len({m for _, m in counted if m in self._ident and not self._ident[m]["key"]})
             pending_ident = len(self.pending_identities())
-            pending_mc = len(self.pending_mc_users(now))
+            first, refresh = self._mc_queue(now)
+            pending_mc = len(first) + len(refresh)
             res = self._evaluate(now)
-            if (self.fail.covered_to and self.assoc.covered_to and not pending_ident and not pending_mc):
+            if (self.fail.covered_to and self.assoc.covered_to and not pending_ident and not first):
                 self._latched = True
             self._busy = (not self._latched or pending_ident > 0 or pending_mc > 0
                           or self.fail.walk is not None or self.assoc.walk is not None)
