@@ -122,12 +122,12 @@ excluded and counted in `mist_pn_auth_failure_clients_unresolved`; "unique clien
 become a metric label, a log line, or a file. There is no per-user or per-MAC series. After a restart the
 exporter has to reload them, which is the history-loading period below.
 
-**Two-week trend.** Every chart in the row shows the last 14 days (a panel-level range, so it holds even
-when the dashboard is set to 6 hours). Each point is the trailing 24-hour value at that moment. Prometheus
-keeps 180 days, so history simply accumulates from when the feature was switched on; it cannot be
-backfilled, because rebuilding two weeks of events would be 14 times the load and Mist does not retain
-client events that long. After an exporter restart the event-based counts are withheld until the 24 hours
-are reloaded, so the trend shows a short gap instead of a false dip.
+**Trend.** Mist Wireless opens on the last 7 days, and the PantherNet charts follow the time picker, so
+widen it to look further back. Each point is the trailing 24-hour value at that moment. Prometheus keeps
+180 days (`PROMETHEUS_RETENTION`), so history simply accumulates from when the feature was switched on; it
+cannot be backfilled, because rebuilding weeks of events would be many times the load and Mist does not
+retain client events that long. After an exporter restart the event-based counts are withheld until the 24
+hours are reloaded, so the trend shows a short gap instead of a false dip.
 
 **Cost and loading time.** The exporter reads 24 hours of events in small slices and looks up each failing
 device's username and each failing user's MiddleburyCollege connections. While loading, it makes up to
