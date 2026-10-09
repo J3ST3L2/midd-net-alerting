@@ -29,8 +29,10 @@ class Collector:
         self._errors = {s: 0 for s in SOURCES}
         self._duration = {}
         self._due = {s: 0.0 for s in SOURCES}
+        hasher, store = pn_fallback.open_cache(cfg.fallback_cache_path, cfg.fallback_cache_key_file)
         self._fallback = pn_fallback.Tracker(cfg.fallback_window_s, cfg.fallback_lookback_h * 3600,
-                                             cfg.pn_ssid, cfg.mc_ssid)
+                                             cfg.pn_ssid, cfg.mc_ssid, hasher=hasher, store=store,
+                                             cache_ttl_s=cfg.fallback_cache_ttl_h * 3600, now=clock())
         self.clearpass = clearpass_pn.ClearPassTracker(
             cfg.pn_ssid, cfg.mc_ssid, cfg.fallback_window_s, cfg.fallback_lookback_h * 3600,
             cfg.clearpass_min_history_h * 3600,

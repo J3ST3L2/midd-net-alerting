@@ -37,6 +37,7 @@ sudo install -d -m 700 secrets
 sudo sh -c 'umask 077; printf "Mist read-only token: "; read -rs T; echo; printf %s "$T" > secrets/mist-api-token'
 sudo sh -c 'umask 077; printf "Grafana admin password: "; read -rs T; echo; printf %s "$T" > secrets/grafana-admin-password'
 sudo chmod 444 secrets/mist-api-token secrets/grafana-admin-password   # dir is 700, so root-only on the host
+sudo sh -c 'umask 077; openssl rand -hex 32 > secrets/pn-cache-key' && sudo chmod 444 secrets/pn-cache-key   # lookup cache key, see "Lookup cache"
 
 sudo docker compose config >/dev/null        # validates .env and secrets
 sudo docker compose up -d --build
@@ -151,6 +152,57 @@ Metrics: `mist_pn_unique_clients{ssid}`, `mist_pn_auth_failure_events`, `mist_pn
 `mist_pn_fallback_clients{match}`, `mist_pn_fallback_rate{match}`, `mist_pn_failure_reason_events{reason}`,
 `mist_pn_lookups_pending{stage}`, `mist_pn_fallback_window_seconds`, `mist_pn_backfill_complete`.
 `mist_exporter_*` metrics include `source="fallback"`.
+
+## Lookup cache (so a restart does not reload for hours)
+
+The PantherNet numbers need two kinds of Mist lookup that cost one call each: which **user** a failing
+device belongs to, and which devices that user connected to **MiddleburyCollege** with. Read cold, that
+is thousands of calls at about 24 a minute, hours of loading. Keeping the answers in memory only meant every
+restart paid it again, so they are now cached on disk, **as keyed hashes only**.
+
+**What is stored.** A small SQLite file (`pn-cache.sqlite3`) in the `exporter-state` Docker volume with two
+tables: `ident` (hash of a device MAC, hash of its user, OS, model, time) and `mc` (hash of a user, time, the
+hashes of the devices they used on MiddleburyCollege). A hash is HMAC-SHA256 with a secret key, so the file
+holds **no username and no MAC**. Raw usernames still live in memory only, are never a metric label and are
+never logged. The file is created `0600`. Tests assert that neither a username nor a MAC appears anywhere in
+the database file.
+
+**What it does and does not protect.** The key lives in a Docker secret, separate from the file, so a copy of
+the volume or a backup of it cannot be used to check a guessed username or MAC. It is **pseudonymous, not
+anonymous**: whoever holds both the key and the file can check a guess. Treat the file and the key as
+sensitive, keep the key out of Git (`secrets/` is ignored), and do not copy them off gravitron.
+
+**Set it up once** (before the first `docker compose up`; compose needs the file to exist):
+
+```bash
+cd deploy/mist-dashboard
+sudo sh -c 'umask 077; openssl rand -hex 32 > secrets/pn-cache-key'
+sudo chmod 444 secrets/pn-cache-key          # the directory is 0700, so this is still root-only on the host
+```
+
+Without a key of at least 32 characters the exporter simply keeps everything in memory, as before.
+
+**What a restart costs now.** The sign-in events are still re-read (about 10 to 20 minutes). The username and
+connection lookups come from the cache, so the History tile flips to Loaded after that, not after hours. The
+first load after enabling the cache is still the slow one; the cache fills as it goes, so even a restart in the
+middle of a load keeps what was already looked up. A user known only from the cache has no raw username in
+memory; if a brand-new failure for that user needs a fresh MiddleburyCollege check, the exporter asks Mist for
+the name once more, through one of the user's devices.
+
+| Setting (`.env`) | Default | Meaning |
+|---|---|---|
+| `FALLBACK_CACHE_TTL_H` | `72` | hours a cached lookup is trusted before Mist is asked again |
+| `secrets/pn-cache-key` | none | secret key, 32+ characters; no key means memory-only |
+
+**Operate it.** `mist_pn_cache_entries{kind}` shows how many cached lookups were restored at start. To start
+fresh (for example after rotating the key, which makes the old cache unusable and forces a full reload):
+
+```bash
+sudo docker compose stop exporter && sudo docker volume rm mist-dashboard_exporter-state && sudo docker compose up -d exporter
+```
+
+A database error (disk full, corrupt file) switches the cache off with one log line and the exporter carries on
+in memory; it never stops the exporter.
 
 ## Aruba / ClearPass (Aruba PantherNet dashboard)
 
