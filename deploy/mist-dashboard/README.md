@@ -21,7 +21,7 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
     throughput), the APs behind coverage and capacity problems, APs that dropped offline or rebooted,
     and band share. Start here for a "wifi is bad in building X" complaint.
   - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
-  - *Aruba PantherNet*: PantherNet adoption on the Aruba APs from ClearPass, beside Mist and combined (see below).
+  - *PantherNet (ClearPass)*: PantherNet adoption across the whole campus from ClearPass, split into Aruba and Mist access points (see below).
 - Only Grafana publishes a port, and only on loopback. Exporter and Prometheus are on a private
   Docker network.
 
@@ -204,37 +204,47 @@ sudo docker compose stop exporter && sudo docker volume rm mist-dashboard_export
 A database error (disk full, corrupt file) switches the cache off with one log line and the exporter carries on
 in memory; it never stops the exporter.
 
-## Aruba / ClearPass (Aruba PantherNet dashboard)
+## ClearPass (PantherNet (ClearPass) dashboard)
 
-PantherNet adoption on the Aruba APs that remain, from **ClearPass** authentication records. The Mist
-numbers cannot see these clients, so without this the campus-wide share is understated. The **Aruba
-PantherNet** dashboard shows PantherNet's share of unique clients for Mist, Aruba and combined, plus the
-same failure and fallback panels as the Mist row.
+PantherNet adoption for the **whole campus**, from **ClearPass** authentication records, with the Aruba and Mist
+access points shown separately. ClearPass is the RADIUS server for PantherNet on *both* kinds of access point
+(the Mist WLAN profile points at `cpauth1` / `cpauth2`), so one feed covers the Aruba APs the Mist API cannot see
+and gives an independent cross-check of the Mist numbers. The **PantherNet (ClearPass)** dashboard shows
+PantherNet's share of unique clients for the campus, for Aruba and for Mist, the Mist API's own figure beside it,
+and the failure and fallback panels.
 
-**How it works.** ClearPass is the RADIUS server and already knows, for every authentication, the
-username, the client MAC and the SSID. It pushes those records over syslog to the exporter on gravitron,
-which keeps the last 24 hours in memory. No Mist-style lookups are needed because the username is on the
-record, but ClearPass cannot replay history either, so the Aruba counts are **withheld until a full 24 hours
-of records have arrived** and an exporter restart leaves a gap in the Aruba charts (never a false dip).
-There is no AirWave or ClearPass API account in v1; they are not needed.
+**How it works.** ClearPass already knows, for every authentication, the username, the client MAC, the SSID and
+the NAS (the access point or controller that sent the request). It pushes those records over syslog to the exporter
+on gravitron, which keeps the last 24 hours in memory. No Mist-style lookups are needed because the username is on
+the record, but ClearPass cannot replay history either, so the counts are **withheld until a full 24 hours of
+records have arrived** and an exporter restart leaves a gap in these charts (never a false dip). There is no
+AirWave or ClearPass API account; they are not needed.
+
+**Aruba vs Mist.** Every number is exported for `platform="campus"`. If `CLEARPASS_ARUBA_NAS` lists the Aruba
+controller addresses (or networks), each record is also tagged by its NAS address: a listed address is `aruba`,
+any other address is `other` (the Mist access points), and a record with no NAS address is counted in the campus
+totals and in `clearpass_pn_unclassified_events_total` only. A failure belongs to the platform it happened on; a
+fallback is a MiddleburyCollege success on **either** platform, since the user simply moved to the other network.
+Without the list only the campus figures exist.
 
 **Definitions** are the same as the Mist row: a failure is a rejected authentication on PantherNet; a
 fallback is a failure followed by a MiddleburyCollege success by the same normalised username within
 `FALLBACK_WINDOW_S`, judged only after the window has passed. Matching is by username only (there is no OS or
 model on these records). **Fallback can only be seen if MiddleburyCollege authenticates through ClearPass
 too**; if it uses a PSK or an open portal there is no success record to match, and the fallback panels will
-stay at zero.
+stay at zero. The Mist figure and the ClearPass figure for Mist access points should be close; a large gap means
+one of the two feeds is incomplete.
 
 ### What has to be created (one-time)
 
 | Who | What |
 |---|---|
-| ClearPass admin | **Syslog target**: Administration > External Servers > Syslog Targets. Host = gravitron's address, protocol UDP (or TCP), port 5514. |
+| ClearPass admin | **Syslog target**: Administration > External Servers > Syslog Targets. Host = gravitron's address, protocol UDP (or TCP), port 5514. The cluster has four nodes (`cpauth1` 140.233.1.113, `cpauth2` 140.233.1.114, and the Monterey pair `cpauth1-ca` 172.16.12.51, `cpauth2-ca` 172.16.12.52). The target and filters are cluster-wide, but **each node sends its own records from its own address**. |
 | ClearPass admin | **Syslog export filters**: Administration > External Servers > Syslog Export Filters ([Aruba docs](https://arubanetworking.hpe.com/techdocs/ClearPass/6.12/PolicyManager/Content/CPPM_UserGuide/Admin/syslogExportFilters.html)). Two filters, both pointing at the target above: **Insight Logs / "Radius Authentications"** (successes) and **Insight Logs / "Radius Failed Authentications"** (failures). Include the RADIUS data so the SSID (`Aruba-Essid-Name`) is on each record. Format CEF if offered. A filter supports one template and one group, hence two filters. Names vary slightly between ClearPass versions. |
-| Network / firewall | Allow the ClearPass server address(es) to reach gravitron on **UDP and TCP 5514**. |
+| Network / firewall | Allow every ClearPass node that should be counted to reach gravitron on **UDP and TCP 5514**. Counting only Vermont means the first two nodes; adding the Monterey pair needs a route from 172.16.12.x to gravitron, and puts Monterey sign-ins into the PantherNet share. |
 | Whoever runs gravitron | Set the `.env` values below and `docker compose up -d`. |
 
-No API client, no AirWave account, and no change on the Aruba controllers are needed.
+No API client, no AirWave account, and no change on the Aruba controllers are needed. The only controller detail used is their address, for the Aruba vs Mist split.
 
 ### Turn it on (gravitron)
 
@@ -258,14 +268,14 @@ Restarting the exporter restarts the Mist PantherNet history load too, so do thi
 ### Check it
 
 ```bash
-sudo docker exec mist-prometheus wget -qO- http://exporter:9877/metrics | grep -E '^aruba_pn_(events|unmapped|dropped|history)'
+sudo docker exec mist-prometheus wget -qO- http://exporter:9877/metrics | grep -E '^clearpass_pn_(events|unmapped|unclassified|dropped|history)'
 ```
 
-- `aruba_pn_events_received_total` rising: records are arriving and usable.
-- `aruba_pn_unmapped_events_total` rising fast: records arrive but the SSID, username or MAC could not be
+- `clearpass_pn_events_received_total` rising: records are arriving and usable.
+- `clearpass_pn_unmapped_events_total` rising fast: records arrive but the SSID, username or MAC could not be
   found. The exporter logs the **field names** it has seen (never values) every 10 minutes
   (`clearpass fields seen (names only): ...`); send that list so the mapping can be adjusted.
-- `aruba_pn_dropped_events_total` above zero: records from an address not in `CLEARPASS_ALLOW`.
+- `clearpass_pn_dropped_events_total` above zero: records from an address not in `CLEARPASS_ALLOW`.
 
 ### Limits and handling
 
@@ -293,6 +303,7 @@ sudo docker exec mist-prometheus wget -qO- http://exporter:9877/metrics | grep -
 | `CLEARPASS_SYSLOG_HOST_PORT` | `5514` | host port (the container always listens on 5514) |
 | `CLEARPASS_MIN_HISTORY_H` | `24` | hours of records before counts are shown |
 | `CLEARPASS_NOISE_CODES` | empty | error codes not counted as PantherNet failures |
+| `CLEARPASS_ARUBA_NAS` | empty | Aruba controller addresses or networks, to split Aruba from Mist; empty = campus only |
 
 ## Known limits
 

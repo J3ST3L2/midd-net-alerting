@@ -20,8 +20,10 @@ NAMES = ["zz-a", "zz-b", "zz-c", "zz-d", "zz-e"]
 MACS = ["aabbcc000001", "aabbcc000002", "aabbcc000003", "aabbcc000004", "aabbcc000005", "aabbcc00000f"]
 
 
-def cef(user, mac, outcome, ssid, code="", pri="<134>Oct  8 10:00:00 cppm "):
+def cef(user, mac, outcome, ssid, code="", pri="<134>Oct  8 10:00:00 cppm ", nas=""):
     ext = "suser=%s smac=%s outcome=%s Aruba-Essid-Name=%s" % (user, mac, outcome, ssid)
+    if nas:
+        ext += " NAS-IP-Address=" + nas
     if code:
         ext += " Error-Code=%s msg=RADIUS authentication failed" % code
     return pri + "CEF:0|Aruba|ClearPass|6.11|1|Radius Auth|3|" + ext
@@ -116,50 +118,50 @@ class Tracking(unittest.TestCase):
         self.fams = self.t.families(ttl=0)
 
     def test_counts(self):
-        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_events"), 4.0)        # A, B, C, D
-        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_clients"), 3.0)        # A, B, C
-        self.assertEqual(value(self.fams, "aruba_pn_auth_failure_clients_unresolved"), 1.0)
-        self.assertEqual(value(self.fams, "aruba_pn_failure_reason_events", reason="9002"), 3.0)
-        self.assertEqual(value(self.fams, "aruba_pn_failure_reason_events", reason="9005"), 1.0)
+        self.assertEqual(value(self.fams, "clearpass_pn_auth_failure_events"), 4.0)        # A, B, C, D
+        self.assertEqual(value(self.fams, "clearpass_pn_auth_failure_clients"), 3.0)        # A, B, C
+        self.assertEqual(value(self.fams, "clearpass_pn_auth_failure_clients_unresolved"), 1.0)
+        self.assertEqual(value(self.fams, "clearpass_pn_failure_reason_events", reason="9002"), 3.0)
+        self.assertEqual(value(self.fams, "clearpass_pn_failure_reason_events", reason="9005"), 1.0)
 
     def test_fallback_judges_only_matured_failures(self):
-        self.assertEqual(value(self.fams, "aruba_pn_fallback_eligible_clients", match="user"), 2.0)   # A, B
-        self.assertEqual(value(self.fams, "aruba_pn_fallback_clients", match="user"), 1.0)            # A
-        self.assertAlmostEqual(value(self.fams, "aruba_pn_fallback_rate", match="user"), 0.5)
+        self.assertEqual(value(self.fams, "clearpass_pn_fallback_eligible_clients"), 2.0)   # A, B
+        self.assertEqual(value(self.fams, "clearpass_pn_fallback_clients"), 1.0)            # A
+        self.assertAlmostEqual(value(self.fams, "clearpass_pn_fallback_rate"), 0.5)
 
     def test_unique_clients_count_devices_with_a_successful_auth(self):
-        self.assertEqual(value(self.fams, "aruba_pn_unique_clients", ssid=PN), 1.0)   # only E succeeded on PN
-        self.assertEqual(value(self.fams, "aruba_pn_unique_clients", ssid=MC), 3.0)   # A's second MAC, B, E
+        self.assertEqual(value(self.fams, "clearpass_pn_unique_clients", ssid=PN), 1.0)   # only E succeeded on PN
+        self.assertEqual(value(self.fams, "clearpass_pn_unique_clients", ssid=MC), 3.0)   # A's second MAC, B, E
 
     def test_failure_that_matures_later_becomes_eligible(self):
         self.clock.t += WINDOW
         fams = self.t.families(ttl=0)
-        self.assertEqual(value(fams, "aruba_pn_fallback_eligible_clients", match="user"), 3.0)
+        self.assertEqual(value(fams, "clearpass_pn_fallback_eligible_clients"), 3.0)
 
     def test_nothing_eligible_means_no_rate_sample(self):
         t = tracker(self.clock)
         t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
-        self.assertIsNone(value(t.families(ttl=0), "aruba_pn_fallback_rate"))
+        self.assertIsNone(value(t.families(ttl=0), "clearpass_pn_fallback_rate"))
 
     def test_events_age_out_of_the_window(self):
         self.clock.t += 90000
         fams = self.t.families(ttl=0)
-        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 0.0)
-        self.assertEqual(value(fams, "aruba_pn_unique_clients", ssid=MC), 0.0)
+        self.assertEqual(value(fams, "clearpass_pn_auth_failure_events"), 0.0)
+        self.assertEqual(value(fams, "clearpass_pn_unique_clients", ssid=MC), 0.0)
 
     def test_noise_codes_are_not_counted_but_still_charted(self):
         t = tracker(self.clock, noise=["9005"])
         t.handle_line(cef("zz-c", "AA-BB-CC-00-00-03", "Reject", PN, "9005"))
         t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
         fams = t.families(ttl=0)
-        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 1.0)
-        self.assertEqual(value(fams, "aruba_pn_failure_reason_events", reason="9005"), 1.0)
+        self.assertEqual(value(fams, "clearpass_pn_auth_failure_events"), 1.0)
+        self.assertEqual(value(fams, "clearpass_pn_failure_reason_events", reason="9005"), 1.0)
 
     def test_reason_labels_are_bounded(self):
         t = tracker(self.clock)
         for code in range(1000, 1040):
             t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, str(code)))
-        reasons = [f for f in t.families(ttl=0) if f.name == "aruba_pn_failure_reason_events"][0].samples
+        reasons = [f for f in t.families(ttl=0) if f.name == "clearpass_pn_failure_reason_events"][0].samples
         self.assertLessEqual(len(reasons), 13)
         self.assertEqual(sum(v for _, v in reasons), 40.0)
 
@@ -167,19 +169,19 @@ class Tracking(unittest.TestCase):
         t = tracker(self.clock, min_history_s=3600)
         t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
         fams = t.families(ttl=0)
-        self.assertIsNone(value(fams, "aruba_pn_auth_failure_events"))             # withheld
-        self.assertEqual(value(fams, "aruba_pn_history_complete"), 0.0)             # status still visible
-        self.assertEqual(value(fams, "aruba_pn_events_received_total"), 1.0)
+        self.assertIsNone(value(fams, "clearpass_pn_auth_failure_events"))             # withheld
+        self.assertEqual(value(fams, "clearpass_pn_history_complete"), 0.0)             # status still visible
+        self.assertEqual(value(fams, "clearpass_pn_events_received_total"), 1.0)
         self.clock.t += 3601
         t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002"))
         fams = t.families(ttl=0)
-        self.assertEqual(value(fams, "aruba_pn_history_complete"), 1.0)
-        self.assertEqual(value(fams, "aruba_pn_auth_failure_events"), 2.0)
+        self.assertEqual(value(fams, "clearpass_pn_history_complete"), 1.0)
+        self.assertEqual(value(fams, "clearpass_pn_auth_failure_events"), 2.0)
 
     def test_garbage_never_raises_and_is_counted(self):
         for junk in ["", "\x00\x01", "CEF:0|only|two", "=====", "a=b c=d", "x" * 100000]:
             self.assertFalse(self.t.handle_line(junk))
-        self.assertGreaterEqual(value(self.t.families(ttl=0), "aruba_pn_unmapped_events_total"), 6.0)
+        self.assertGreaterEqual(value(self.t.families(ttl=0), "clearpass_pn_unmapped_events_total"), 6.0)
 
     def test_memory_is_bounded_under_a_flood(self):
         old = (clearpass_pn.MAX_EVENTS, clearpass_pn.MAX_CLIENTS, clearpass_pn.MAX_PER_USER)
@@ -193,13 +195,95 @@ class Tracking(unittest.TestCase):
         for _ in range(10):
             t.handle_line(cef("zz-0", "%012x" % 0, "Accept", MC))
         fams = t.families(ttl=0)
-        self.assertLessEqual(value(fams, "aruba_pn_auth_failure_events"), 50.0)
-        self.assertLessEqual(value(fams, "aruba_pn_unique_clients", ssid=MC), 40.0)
+        self.assertLessEqual(value(fams, "clearpass_pn_auth_failure_events"), 50.0)
+        self.assertLessEqual(value(fams, "clearpass_pn_unique_clients", ssid=MC), 40.0)
         self.assertLessEqual(len(t._mc_ok["zz-0"]), 3)
 
     def test_other_ssids_are_ignored(self):
         self.t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", "eduroam"))
-        self.assertEqual(value(self.t.families(ttl=0), "aruba_pn_unique_clients", ssid=PN), 1.0)
+        self.assertEqual(value(self.t.families(ttl=0), "clearpass_pn_unique_clients", ssid=PN), 1.0)
+
+
+ARUBA = parse_allow("192.0.2.0/29")            # the Aruba controllers, in this test
+
+
+class Platforms(unittest.TestCase):
+    """ClearPass authenticates PantherNet for Mist and Aruba access points alike, so the feed is campus-wide;
+    the NAS address on each record says which kind of access point it came from."""
+
+    def setUp(self):
+        self.clock = Clock()
+        self.t = tracker(self.clock, aruba_nas=ARUBA)
+        t0 = self.clock.t
+
+        def at(offset, line):
+            self.clock.t = t0 + offset
+            self.t.handle_line(line)
+
+        # A fails on an Aruba controller, then connects to MiddleburyCollege through a Mist AP: an Aruba failure
+        # that fell back, even though the success was on the other platform
+        at(0, cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002", nas="192.0.2.1"))
+        at(300, cef("zz-a", "AA-BB-CC-00-00-0F", "Accept", MC, nas="198.51.100.7"))
+        # B fails on a Mist AP and never falls back
+        at(10, cef("zz-b", "AA-BB-CC-00-00-02", "Reject", PN, "9005", nas="198.51.100.8"))
+        # C: no NAS on the record -> counted for the campus only
+        at(20, cef("zz-c", "AA-BB-CC-00-00-03", "Reject", PN, "9002"))
+        # successes on PantherNet: one Aruba device, two Mist devices
+        at(30, cef("zz-d", "AA-BB-CC-00-00-04", "Accept", PN, nas="192.0.2.2"))
+        at(31, cef("zz-e", "AA-BB-CC-00-00-05", "Accept", PN, nas="198.51.100.9"))
+        at(32, cef("zz-f", "AA-BB-CC-00-00-06", "Accept", PN, nas="198.51.100.9"))
+        self.clock.t = t0 + 5000
+        self.fams = self.t.families(ttl=0)
+
+    def v(self, name, platform, **labels):
+        return value(self.fams, name, platform=platform, **labels)
+
+    def test_failures_belong_to_the_platform_they_happened_on(self):
+        self.assertEqual(self.v("clearpass_pn_auth_failure_events", "aruba"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_auth_failure_events", "other"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_auth_failure_events", "campus"), 3.0)     # includes the unclassified one
+
+    def test_fallback_crosses_platforms(self):
+        self.assertEqual(self.v("clearpass_pn_fallback_clients", "aruba"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_fallback_eligible_clients", "aruba"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_fallback_clients", "other"), 0.0)          # B never connected
+        self.assertEqual(self.v("clearpass_pn_fallback_eligible_clients", "other"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_fallback_clients", "campus"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_fallback_eligible_clients", "campus"), 3.0)
+
+    def test_unique_clients_split_by_the_platform_of_the_last_success(self):
+        self.assertEqual(self.v("clearpass_pn_unique_clients", "aruba", ssid=PN), 1.0)
+        self.assertEqual(self.v("clearpass_pn_unique_clients", "other", ssid=PN), 2.0)
+        self.assertEqual(self.v("clearpass_pn_unique_clients", "campus", ssid=PN), 3.0)
+
+    def test_unclassified_records_are_counted_and_still_in_the_campus_totals(self):
+        self.assertEqual(value(self.fams, "clearpass_pn_unclassified_events_total"), 1.0)
+
+    def test_reasons_are_per_platform(self):
+        self.assertEqual(self.v("clearpass_pn_failure_reason_events", "aruba", reason="9002"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_failure_reason_events", "other", reason="9005"), 1.0)
+        self.assertEqual(self.v("clearpass_pn_failure_reason_events", "campus", reason="9002"), 2.0)
+
+    def test_without_controller_addresses_only_the_campus_view_exists(self):
+        t = tracker(self.clock)
+        t.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Reject", PN, "9002", nas="192.0.2.1"))
+        fams = t.families(ttl=0)
+        platforms = {l["platform"] for f in fams for l, _ in f.samples if "platform" in l}
+        self.assertEqual(platforms, {"campus"})
+        self.assertEqual(value(fams, "clearpass_pn_unclassified_events_total"), 0.0)
+
+    def test_nas_address_is_found_under_several_field_names(self):
+        for line in ("suser=zz-a smac=AA-BB-CC-00-00-01 outcome=Accept ssid=PantherNet NAS-IP-Address=192.0.2.1",
+                     "username=zz-a smac=AA-BB-CC-00-00-01 outcome=Accept ssid=PantherNet Radius.IETF.NAS-IP-Address=192.0.2.1",
+                     "username=zz-a callingstationid=AABBCC000001 status=Accept essid=PantherNet nasip=192.0.2.1"):
+            self.assertEqual(extract(parse_fields(line))["nas"], "192.0.2.1", line)
+
+    def test_a_cidr_network_matches_many_controllers(self):
+        t = tracker(self.clock, aruba_nas=parse_allow("10.20.0.0/16"))
+        self.assertEqual(t.platform_of("10.20.30.40"), "aruba")
+        self.assertEqual(t.platform_of("10.21.0.1"), "other")
+        self.assertEqual(t.platform_of(""), "unclassified")
+        self.assertEqual(t.platform_of("not-an-ip"), "unclassified")
 
 
 class Privacy(unittest.TestCase):
@@ -292,9 +376,9 @@ class CollectorIntegration(unittest.TestCase):
         c = Collector(Config(clearpass_min_history_h=0), object(), clock=Clock())
         c.clearpass.handle_line(cef("zz-a", "AA-BB-CC-00-00-01", "Accept", PN))
         text = c.render()
-        self.assertIn("# TYPE aruba_pn_unique_clients gauge", text)
-        self.assertIn('aruba_pn_unique_clients{ssid="PantherNet"} 1', text)
-        self.assertIn("aruba_pn_events_received_total 1", text)
+        self.assertIn("# TYPE clearpass_pn_unique_clients gauge", text)
+        self.assertIn('clearpass_pn_unique_clients{platform="campus",ssid="PantherNet"} 1', text)
+        self.assertIn("clearpass_pn_events_received_total 1", text)
         self.assertNotIn("zz-a", text)
 
 

@@ -52,6 +52,9 @@ class Config:
     clearpass_allow: str = ""
     clearpass_min_history_h: int = 24       # event-based counts are withheld until this much has been received
     clearpass_noise_codes: str = ""         # ClearPass error codes not counted as failures (comma separated)
+    # Aruba controller addresses or networks, matched against the NAS address on each record to split the
+    # campus-wide numbers into Aruba vs other (Mist) access points. Empty = campus-wide only.
+    clearpass_aruba_nas: str = ""
     pn_ssid: str = "PantherNet"
     mc_ssid: str = "MiddleburyCollege"
     mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
@@ -92,6 +95,7 @@ def load():
         clearpass_allow=env("CLEARPASS_ALLOW", "").strip(),
         clearpass_min_history_h=int(env("CLEARPASS_MIN_HISTORY_H", "24")),
         clearpass_noise_codes=env("CLEARPASS_NOISE_CODES", "").strip(),
+        clearpass_aruba_nas=env("CLEARPASS_ARUBA_NAS", "").strip(),
         pn_ssid=env("PN_SSID", "PantherNet").strip(),
         mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
         mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),

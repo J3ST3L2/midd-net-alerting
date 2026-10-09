@@ -1,22 +1,28 @@
-"""PantherNet adoption on Aruba APs, from ClearPass authentication logs.
+"""PantherNet adoption from ClearPass authentication logs, for the whole campus.
 
-ClearPass is the RADIUS server for the Aruba side. It pushes its authentication records over syslog
-(Administration > External Servers > Syslog Export Filters), one record per RADIUS authentication, with
-the username, client MAC and SSID. That gives the same three numbers the Mist side computes, with the
-username present on every record, so there is no per-device lookup and no multi-hour history load:
+ClearPass is the RADIUS server for PantherNet on BOTH Mist and Aruba access points. It pushes its
+authentication records over syslog (Administration > External Servers > Syslog Export Filters), one per RADIUS
+authentication, with the username, client MAC, SSID and the NAS (access point or controller) address. That gives
+the same three numbers the Mist row computes, vendor-independent, with the username on every record, so there is
+no per-device lookup and no multi-hour history load:
 
   * unique clients per SSID (successful authentications),
   * PantherNet authentication failures (and unique users behind them), and
   * fallback: a PantherNet failure followed by a MiddleburyCollege success by the same user within the
     window, judged only after the window has passed (so it lags by that long).
 
-Records are parsed tolerantly: ClearPass can export CEF or a plain key=value format, and field names
-differ between export templates, so fields are matched by normalised name from candidate lists. Only
-field NAMES are ever logged; usernames and MACs live in memory, are never a metric label, never logged,
-never written to disk. There is no history to reload, so after a restart the counts are partial until a
-full lookback of events has been received, and are withheld until then (see ``min_history_s``).
+Every number is exported for ``platform="campus"``; with ``CLEARPASS_ARUBA_NAS`` set to the Aruba controller
+addresses it is also split into ``aruba`` and ``other`` (the Mist access points) by the NAS address on the
+record. A failure belongs to the platform it happened on; a fallback is a MiddleburyCollege success on either.
+
+Records are parsed tolerantly: ClearPass can export CEF or a plain key=value format, and field names differ
+between export templates, so fields are matched by normalised name from candidate lists. Only field NAMES are
+ever logged; usernames and MACs live in memory, are never a metric label, never logged, never written to disk.
+There is no history to reload, so after a restart the counts are partial until a full lookback of events has
+been received, and are withheld until then (see ``min_history_s``).
 """
 import collections
+import ipaddress
 import re
 import threading
 import time
@@ -29,6 +35,7 @@ from .pn_fallback import normalize_username
 USER = ("username", "suser", "duser", "user")
 MAC = ("callingstationid", "smac", "srcmac", "clientmac", "macaddress", "mac")
 SSID = ("arubaessidname", "essidname", "essid", "ssid")
+NAS = ("nasipaddress", "nasip", "nasaddress")      # the access point or controller that sent the RADIUS request
 CALLED = ("calledstationid",)                      # "AA-BB-CC-DD-EE-FF:SSID" on some templates
 STATUS = ("loginstatus", "outcome", "authstatus", "result", "status")
 ERROR = ("errorcode", "reason", "alerts", "msg", "message")
@@ -112,26 +119,40 @@ def extract(fields):
     ssid = _pick(fields, SSID) or _called_ssid(_pick(fields, CALLED))
     user = normalize_username(_pick(fields, USER))
     mac = _mac(_pick(fields, MAC))
-    return {"status": status, "ssid": ssid, "user": user, "mac": mac,
+    return {"status": status, "ssid": ssid, "user": user, "mac": mac, "nas": _pick(fields, NAS),
             "reason": _reason(fields) if status == "reject" else ""}
 
 
 class ClearPassTracker:
-    def __init__(self, pn_ssid, mc_ssid, window_s, lookback_s, min_history_s=None, noise=(), clock=time.time):
+    def __init__(self, pn_ssid, mc_ssid, window_s, lookback_s, min_history_s=None, noise=(),
+                 aruba_nas=(), clock=time.time):
         self.pn_ssid, self.mc_ssid = pn_ssid.lower(), mc_ssid.lower()
         self._names = {self.pn_ssid: pn_ssid, self.mc_ssid: mc_ssid}
         self.window_s, self.lookback_s = window_s, lookback_s
         self.min_history_s = lookback_s if min_history_s is None else min_history_s
         self.noise, self.clock = frozenset(str(n) for n in noise), clock
+        self.aruba_nas = list(aruba_nas)
+        # campus is always exported; the split needs the Aruba controller addresses to tell the two apart
+        self.scopes = ("campus", "aruba", "other") if self.aruba_nas else ("campus",)
         self._lock = threading.Lock()
         self._started = clock()
-        self._seen = {self.pn_ssid: {}, self.mc_ssid: {}}      # ssid -> {client key: last accepted ts}
-        self._fails = collections.deque(maxlen=MAX_EVENTS)      # (ts, user, mac, reason) PantherNet rejects
-        self._mc_ok = {}                                       # user -> [ts] MiddleburyCollege accepts
-        self.received = self.unmapped = self.dropped = 0
+        self._seen = {self.pn_ssid: {}, self.mc_ssid: {}}      # ssid -> {client key: (last accepted ts, platform)}
+        self._fails = collections.deque(maxlen=MAX_EVENTS)      # (ts, user, mac, reason, platform) PantherNet rejects
+        self._mc_ok = {}                                       # user -> [ts] MiddleburyCollege accepts, any platform
+        self.received = self.unmapped = self.dropped = self.unclassified = 0
         self._last_event = 0
         self._field_names = collections.Counter()
         self._cache = (0, None)
+
+    def platform_of(self, nas):
+        """aruba / other by the NAS address on the record, or unclassified when there is none to judge by."""
+        if not self.aruba_nas:
+            return "campus"
+        try:
+            addr = ipaddress.ip_address(nas.strip())
+        except ValueError:
+            return "unclassified"
+        return "aruba" if any(addr in net for net in self.aruba_nas) else "other"
 
     # ---- ingestion ---------------------------------------------------------------------------
     def handle_line(self, raw):
@@ -149,6 +170,9 @@ class ClearPassTracker:
                     return False
                 self.received += 1
                 self._last_event = now
+                rec["platform"] = self.platform_of(rec["nas"])
+                if rec["platform"] == "unclassified":
+                    self.unclassified += 1
                 self._record(rec, now)
             return True
         except Exception:
@@ -165,13 +189,13 @@ class ClearPassTracker:
         if rec["status"] == "accept":
             seen = self._seen.get(ssid)
             if seen is not None and ((mac or user) in seen or len(seen) < MAX_CLIENTS):
-                seen[mac or user] = now
+                seen[mac or user] = (now, rec["platform"])
             if ssid == self.mc_ssid and user and (user in self._mc_ok or len(self._mc_ok) < MAX_CLIENTS):
                 stamps = self._mc_ok.setdefault(user, [])
                 if len(stamps) < MAX_PER_USER:
                     stamps.append(now)
         elif ssid == self.pn_ssid:
-            self._fails.append((now, user, mac, rec["reason"]))
+            self._fails.append((now, user, mac, rec["reason"], rec["platform"]))
 
     def field_names(self):
         """Names (never values) of the fields seen so far: what to map if the export differs."""
@@ -184,7 +208,7 @@ class ClearPassTracker:
         while self._fails and self._fails[0][0] < cutoff:
             self._fails.popleft()
         for ssid, seen in self._seen.items():
-            self._seen[ssid] = {k: t for k, t in seen.items() if t >= cutoff}
+            self._seen[ssid] = {k: v for k, v in seen.items() if v[0] >= cutoff}
         self._mc_ok = {u: [t for t in ts if t >= cutoff] for u, ts in self._mc_ok.items()}
         self._mc_ok = {u: ts for u, ts in self._mc_ok.items() if ts}
 
@@ -203,14 +227,18 @@ class ClearPassTracker:
             self._cache = (now, out)
             return out
 
-    def _build(self, now):
-        ready = self.history_s() >= self.min_history_s
-        counted = [f for f in self._fails if f[3] not in self.noise]
+    def _scope(self, now, scope):
+        """Every number for one platform. A failure belongs to the platform it happened on; a fallback is a
+        MiddleburyCollege success on any platform, since the user simply moved to the other network."""
+        def keep(platform):
+            return scope == "campus" or platform == scope
+
+        fails = [f for f in self._fails if keep(f[4])]
+        counted = [f for f in fails if f[3] not in self.noise]
         users = collections.defaultdict(list)
-        for ts, user, _mac_, _r in counted:
+        for ts, user, _mac_, _r, _p in counted:
             if user:
                 users[user].append(ts)
-        unresolved = len({m for _, u, m, _r in counted if not u and m})
         eligible = fallback = 0
         for user, stamps in users.items():
             mature = [t for t in stamps if t <= now - self.window_s]
@@ -219,47 +247,62 @@ class ClearPassTracker:
             eligible += 1
             ok = self._mc_ok.get(user, [])
             fallback += any(t < s <= t + self.window_s for t in mature for s in ok)
-        reasons = collections.Counter(r for _, _, _, r in self._fails)
+        reasons = collections.Counter(f[3] for f in fails)
         top = dict(reasons.most_common(MAX_REASONS))
         top["other"] = top.get("other", 0) + sum(n for r, n in reasons.items() if r not in top)
+        return {
+            "unique": {self._names[s]: sum(1 for v in seen.values() if keep(v[1]))
+                       for s, seen in sorted(self._seen.items())},
+            "events": len(counted), "users": len(users),
+            "unresolved": len({m for _, u, m, _r, _p in counted if not u and m}),
+            "eligible": eligible, "fallback": fallback, "reasons": top}
 
-        def gauge(name, help_, samples, kind="gauge"):
-            return Family(name, help_, kind, samples if ready or name in ALWAYS else [])
+    def _build(self, now):
+        ready = self.history_s() >= self.min_history_s
+        by = {scope: self._scope(now, scope) for scope in self.scopes}
+
+        def gauge(name, help_, per_scope, kind="gauge", always=False):
+            """per_scope(stats) -> [(extra labels, value)]; one set of samples per platform."""
+            samples = []
+            if ready or always:
+                for scope, st in by.items():
+                    samples += [(dict(labels, platform=scope), float(v)) for labels, v in per_scope(st)]
+            return Family(name, help_, kind, samples)
+
+        def plain(name, help_, value, kind="gauge", present=True):
+            return Family(name, help_, kind, [({}, float(value))] if present else [])
 
         return [
-            gauge("aruba_pn_unique_clients", "Unique client devices with a successful authentication in the "
-                  "last 24 h, per SSID (Aruba, from ClearPass).",
-                  [({"ssid": self._names[s]}, float(len(v))) for s, v in sorted(self._seen.items())]),
-            gauge("aruba_pn_auth_failure_events", "PantherNet authentication failures in the last 24 h "
-                  "(Aruba, from ClearPass).", [({}, float(len(counted)))]),
-            gauge("aruba_pn_auth_failure_clients", "Unique users with at least one PantherNet failure.",
-                  [({}, float(len(users)))]),
-            gauge("aruba_pn_auth_failure_clients_unresolved", "Failing devices with no username.",
-                  [({}, float(unresolved))]),
-            gauge("aruba_pn_fallback_eligible_clients", "Failing users whose failure is older than the window.",
-                  [({"match": "user"}, float(eligible))]),
-            gauge("aruba_pn_fallback_clients", "Eligible users with a MiddleburyCollege success within the "
-                  "window after a PantherNet failure.", [({"match": "user"}, float(fallback))]),
-            gauge("aruba_pn_fallback_rate", "fallback_clients / eligible_clients (omitted when none).",
-                  [({"match": "user"}, fallback / eligible)] if eligible else []),
-            gauge("aruba_pn_failure_reason_events", "PantherNet failures by ClearPass error code (top "
-                  "%d, rest as 'other')." % MAX_REASONS, [({"reason": r}, float(n)) for r, n in sorted(top.items())]),
-            gauge("aruba_pn_history_seconds", "Seconds of events received since the exporter started.",
-                  [({}, float(self.history_s()))]),
-            gauge("aruba_pn_history_complete", "1 once a full lookback of events has been received.",
-                  [({}, 1.0 if ready else 0.0)]),
-            gauge("aruba_pn_last_event_timestamp_seconds", "Unix time of the last usable ClearPass record.",
-                  [({}, float(self._last_event))] if self._last_event else []),
-            gauge("aruba_pn_events_received_total", "Usable ClearPass records received.",
-                  [({}, float(self.received))], "counter"),
-            gauge("aruba_pn_unmapped_events_total", "Records that could not be used (not an authentication "
-                  "result, or no SSID / username / MAC found).", [({}, float(self.unmapped))], "counter"),
-            gauge("aruba_pn_dropped_events_total", "Records dropped because they came from a source address "
-                  "that is not allowed.", [({}, float(self.dropped))], "counter"),
+            gauge("clearpass_pn_unique_clients", "Unique client devices with a successful authentication in the "
+                  "last 24 h, per SSID and platform (from ClearPass).",
+                  lambda st: [({"ssid": s}, n) for s, n in st["unique"].items()]),
+            gauge("clearpass_pn_auth_failure_events", "PantherNet authentication failures in the last 24 h.",
+                  lambda st: [({}, st["events"])]),
+            gauge("clearpass_pn_auth_failure_clients", "Unique users with at least one PantherNet failure.",
+                  lambda st: [({}, st["users"])]),
+            gauge("clearpass_pn_auth_failure_clients_unresolved", "Failing devices with no username.",
+                  lambda st: [({}, st["unresolved"])]),
+            gauge("clearpass_pn_fallback_eligible_clients", "Failing users whose failure is older than the window.",
+                  lambda st: [({}, st["eligible"])]),
+            gauge("clearpass_pn_fallback_clients", "Eligible users with a MiddleburyCollege success within the "
+                  "window after a PantherNet failure.", lambda st: [({}, st["fallback"])]),
+            gauge("clearpass_pn_fallback_rate", "fallback_clients / eligible_clients (omitted when none).",
+                  lambda st: [({}, st["fallback"] / st["eligible"])] if st["eligible"] else []),
+            gauge("clearpass_pn_failure_reason_events", "PantherNet failures by ClearPass error code (top %d, the "
+                  "rest as 'other')." % MAX_REASONS,
+                  lambda st: [({"reason": r}, n) for r, n in sorted(st["reasons"].items())]),
+            plain("clearpass_pn_history_seconds", "Seconds of events received since the exporter started.",
+                  self.history_s()),
+            plain("clearpass_pn_history_complete", "1 once a full lookback of events has been received.",
+                  1.0 if ready else 0.0),
+            plain("clearpass_pn_last_event_timestamp_seconds", "Unix time of the last usable ClearPass record.",
+                  self._last_event, present=bool(self._last_event)),
+            plain("clearpass_pn_events_received_total", "Usable ClearPass records received.", self.received,
+                  "counter"),
+            plain("clearpass_pn_unmapped_events_total", "Records that could not be used (not an authentication "
+                  "result, or no SSID / username / MAC found).", self.unmapped, "counter"),
+            plain("clearpass_pn_unclassified_events_total", "Records with no NAS address to tell Aruba from other "
+                  "access points by (only with CLEARPASS_ARUBA_NAS set).", self.unclassified, "counter"),
+            plain("clearpass_pn_dropped_events_total", "Records dropped because they came from a source address "
+                  "that is not allowed.", self.dropped, "counter"),
         ]
-
-
-# Status metrics stay visible while the history fills, so a quiet or broken feed is obvious.
-ALWAYS = frozenset({"aruba_pn_history_seconds", "aruba_pn_history_complete", "aruba_pn_last_event_timestamp_seconds",
-                    "aruba_pn_events_received_total", "aruba_pn_unmapped_events_total",
-                    "aruba_pn_dropped_events_total"})
