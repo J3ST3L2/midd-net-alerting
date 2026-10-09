@@ -147,7 +147,7 @@ def mist_group_families(vlan_rows, byod_vlans, managed_vlans):
     """PantherNet clients on the Mist side split BYOD / Managed / Other by the VLAN they landed on
     (clients/count?distinct=vlan). Off (no samples) until the two VLAN lists are configured."""
     fam = Family("mist_pn_group_clients", "Mist clients on PantherNet by device group, from their VLAN.", "gauge", [])
-    if not (byod_vlans or managed_vlans):
+    if vlan_rows is None or not (byod_vlans or managed_vlans):      # not fetched yet, failed, or switched off
         return [fam]
     counts = collections.Counter()
     for r in vlan_rows:
