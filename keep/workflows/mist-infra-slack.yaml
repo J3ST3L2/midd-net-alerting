@@ -21,12 +21,12 @@ workflow:
             - key: slack_timestamp_mist_infra_v1
               value: ""
           attachments:
-            - fallback: "{{ alert.labels.mist_device }} RECOVERED • {{ alert.labels.mist_event_type }}"
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Resolved"
               color: "#39ff14"
-              author_name: "{{ alert.labels.mist_device }} RECOVERED"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
-                - title: Event
-                  value: "{{ alert.labels.mist_event_type }}"
+                - title: Status
+                  value: "Resolved"
                   short: false
                 - title: Reason
                   value: "{{ alert.labels.mist_reason }}"
@@ -68,12 +68,12 @@ workflow:
             - key: slack_timestamp_mist_infra_v1
               value: results.slack_timestamp
           attachments:
-            - fallback: "{{ alert.labels.mist_device }} DOWN • {{ alert.labels.mist_event_type }}"
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
               color: "#ff3131"
-              author_name: "{{ alert.labels.mist_device }} DOWN"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
-                - title: Event
-                  value: "{{ alert.labels.mist_event_type }}"
+                - title: Status
+                  value: "Ongoing"
                   short: false
                 - title: Reason
                   value: "{{ alert.labels.mist_reason }}"
@@ -114,12 +114,12 @@ workflow:
           channel: C07U6UYANV8
           slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
           attachments:
-            - fallback: "{{ alert.labels.mist_device }} DOWN • {{ alert.labels.mist_event_type }}"
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
               color: "#ff3131"
-              author_name: "{{ alert.labels.mist_device }} DOWN"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
-                - title: Event
-                  value: "{{ alert.labels.mist_event_type }}"
+                - title: Status
+                  value: "Ongoing"
                   short: false
                 - title: Reason
                   value: "{{ alert.labels.mist_reason }}"
@@ -160,12 +160,12 @@ workflow:
             - key: slack_timestamp_mist_infra_v1
               value: results.slack_timestamp
           attachments:
-            - fallback: "{{ alert.labels.mist_device }} PORT FLAP • {{ alert.labels.mist_event_type }}"
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
               color: "#ffb000"
-              author_name: "{{ alert.labels.mist_device }} PORT FLAP"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
-                - title: Event
-                  value: "{{ alert.labels.mist_event_type }}"
+                - title: Status
+                  value: "Ongoing"
                   short: false
                 - title: Reason
                   value: "{{ alert.labels.mist_reason }}"
@@ -205,12 +205,12 @@ workflow:
           channel: C07U6UYANV8
           slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
           attachments:
-            - fallback: "{{ alert.labels.mist_device }} PORT FLAP • {{ alert.labels.mist_event_type }}"
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
               color: "#ffb000"
-              author_name: "{{ alert.labels.mist_device }} PORT FLAP"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
-                - title: Event
-                  value: "{{ alert.labels.mist_event_type }}"
+                - title: Status
+                  value: "Ongoing"
                   short: false
                 - title: Reason
                   value: "{{ alert.labels.mist_reason }}"
