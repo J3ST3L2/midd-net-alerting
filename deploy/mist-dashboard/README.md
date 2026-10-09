@@ -273,9 +273,15 @@ sudo docker exec mist-prometheus wget -qO- http://exporter:9877/metrics | grep -
 
 - `clearpass_pn_events_received_total` rising: records are arriving and usable.
 - `clearpass_pn_unmapped_events_total` rising fast: records arrive but the SSID, username or MAC could not be
-  found. The exporter logs the **field names** it has seen (never values) every 10 minutes
-  (`clearpass fields seen (names only): ...`); send that list so the mapping can be adjusted.
-- `clearpass_pn_dropped_events_total` above zero: records from an address not in `CLEARPASS_ALLOW`.
+  found. About a minute after records start, and then every 10 minutes when something changed, the exporter
+  logs (grep the log for `clearpass`):
+  - `clearpass fields seen (names only): ...`, the field **names** it has seen;
+  - `clearpass records not usable: N so far; layout of the latest, values masked: ...`, the format of the
+    latest unusable record with every value replaced by `x` (keys such as `suser=` and CEF `cs1Label=Auth.Username`
+    stay, since they name a field and are not data). Send these two lines so the mapping can be adjusted.
+- `clearpass_pn_dropped_events_total` above zero: records from an address not in `CLEARPASS_ALLOW`. The log line
+  `clearpass records dropped by source address: 192.0.2.5=5004, ...` names the addresses (addresses only, never
+  content), so the right ones can be added to the allow-list.
 
 ### Limits and handling
 

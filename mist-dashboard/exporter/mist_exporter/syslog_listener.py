@@ -23,12 +23,15 @@ def parse_allow(text):
 
 
 class Listener:
-    def __init__(self, host, port, tracker, allow, max_tcp=16, describe_every=600):
+    def __init__(self, host, port, tracker, allow, max_tcp=16, describe_every=600, describe_first=60):
         if not allow:
             raise ValueError("refusing to start the ClearPass syslog listener without an allow-list")
         self.tracker, self.allow, self.describe_every = tracker, allow, describe_every
+        self.describe_first = describe_first
+        self._last_names, self._last_unmapped, self._last_dropped = None, 0, None
         self._tcp_slots = threading.BoundedSemaphore(max_tcp)
         self._stop = threading.Event()
+        self._started = False
         listener = self
 
         class UdpHandler(socketserver.BaseRequestHandler):
@@ -41,7 +44,7 @@ class Listener:
             def handle(self):
                 ip = self.client_address[0]
                 if not listener.allowed(ip):             # before taking a slot: strangers cannot hold them
-                    listener.tracker.count_dropped()
+                    listener.tracker.count_dropped(ip)
                     return
                 if not listener._tcp_slots.acquire(blocking=False):
                     return
@@ -72,7 +75,7 @@ class Listener:
 
     def _ingest(self, ip, text):
         if not self.allowed(ip):
-            self.tracker.count_dropped()
+            self.tracker.count_dropped(ip)
             return
         for line in text.splitlines():
             line = _OCTET_COUNT.sub("", line.strip())
@@ -80,6 +83,7 @@ class Listener:
                 self.tracker.handle_line(line)
 
     def start(self):
+        self._started = True
         for server in (self._udp, self._tcp):
             threading.Thread(target=server.serve_forever, daemon=True).start()
         threading.Thread(target=self._describe_loop, daemon=True).start()
@@ -87,13 +91,36 @@ class Listener:
     def stop(self):
         self._stop.set()
         for server in (self._udp, self._tcp):
-            server.shutdown()
+            if self._started:
+                server.shutdown()             # would block forever if serve_forever never ran
             server.server_close()
 
+    def describe(self):
+        """What to log this tick, as a list of lines. Field NAMES, the layout of the latest unusable record with
+        every value masked, and the addresses being dropped: enough to fix a mapping or an allow-list without
+        ever writing a username, MAC or SSID."""
+        lines = []
+        names = self.tracker.field_names()
+        if names and names != self._last_names:
+            lines.append("clearpass fields seen (names only): %s" % ", ".join(names))
+            self._last_names = names
+        unmapped = self.tracker.unmapped
+        if unmapped > self._last_unmapped:
+            layout = self.tracker.unmapped_layout()
+            if layout:
+                lines.append("clearpass records not usable: %d so far; layout of the latest, values masked: %s"
+                             % (unmapped, layout))
+            self._last_unmapped = unmapped
+        dropped = self.tracker.dropped_sources()
+        if dropped and dropped != self._last_dropped:
+            lines.append("clearpass records dropped by source address: %s"
+                         % ", ".join("%s=%d" % (ip, n) for ip, n in dropped))
+            self._last_dropped = dropped
+        return lines
+
     def _describe_loop(self):
-        last = None
-        while not self._stop.wait(self.describe_every):
-            names = self.tracker.field_names()
-            if names and names != last:
-                log.info("clearpass fields seen (names only): %s", ", ".join(names))
-                last = names
+        wait = self.describe_first                  # the first look is early, so a new feed is visible quickly
+        while not self._stop.wait(wait):
+            for line in self.describe():
+                log.info(line)
+            wait = self.describe_every

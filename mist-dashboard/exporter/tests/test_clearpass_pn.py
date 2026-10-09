@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from mist_exporter import clearpass_pn  # noqa: E402
-from mist_exporter.clearpass_pn import ClearPassTracker, extract, parse_fields  # noqa: E402
+from mist_exporter.clearpass_pn import ClearPassTracker, extract, parse_fields, shape  # noqa: E402
 from mist_exporter.collector import Collector  # noqa: E402
 from mist_exporter.config import Config  # noqa: E402
 from mist_exporter.metrics import render  # noqa: E402
@@ -369,6 +369,78 @@ class Sockets(unittest.TestCase):
         self.assertEqual(parse_allow(""), [])
         with self.assertRaises(ValueError):
             parse_allow("not-an-address")
+
+
+class Diagnostics(unittest.TestCase):
+    """What the exporter logs to help map a ClearPass export or fix an allow-list, without any content."""
+
+    CEF_LINE = ("<134>Oct  8 10:00:00 cppm CEF:0|Aruba|ClearPass|6.11|1|Radius Auth|3|cs1=zz-a@example.test "
+                "cs1Label=Auth.Username cs2=AA-BB-CC-00-00-01 cs2Label=Auth.Host-MAC-Address cs3=PantherNet "
+                "cs3Label=Radius.Called-Station-Id suser=zz-b outcome=Accept")
+
+    def test_shape_keeps_keys_and_labels_but_never_a_value(self):
+        out = shape(self.CEF_LINE)
+        for key in ("cs1=", "cs1Label=Auth.Username", "cs2Label=Auth.Host-MAC-Address", "suser=", "outcome="):
+            self.assertIn(key, out)
+        for secret in ["zz-a", "zz-b", "example.test", "aa-bb-cc", "pantherNet".lower(), "cppm", "accept"]:
+            self.assertNotIn(secret, out.lower().replace("auth.", "").replace("called-station-id", ""), secret)
+        self.assertNotIn("Oct", out)
+
+    def test_shape_of_unstructured_and_hostile_input(self):
+        self.assertEqual(shape("zz-c|aabbcc000001|Reject|9002|PantherNet"), "x|x|x|x|x")
+        started = time.time()
+        for junk in ["x" * 200000, "a=" * 100000, ("k=v " * 5000) + "y" * 100000, "|" * 100000]:
+            self.assertLessEqual(len(shape(junk)), 400)
+        self.assertLess(time.time() - started, 2.0)
+
+    def test_dropped_sources_are_counted_by_address_only_and_bounded(self):
+        t = tracker(Clock())
+        for i in range(80):
+            t.count_dropped("10.0.0.%d" % i)
+        for _ in range(5):
+            t.count_dropped("10.0.0.1")
+        top = t.dropped_sources(top=3)
+        self.assertIn(("10.0.0.1", 6), top)                             # the busiest real address is reported
+        self.assertEqual(top[0], ("(others)", 30))                      # and the overflow is lumped together
+        self.assertEqual(t.dropped, 85)
+        self.assertLessEqual(len(t._dropped_by), 51)                    # 50 addresses + "(others)"
+        self.assertIn("(others)", t._dropped_by)
+
+    def listener(self, allow="10.0.0.0/8"):
+        t = tracker(Clock())
+        l = Listener("127.0.0.1", 0, t, parse_allow(allow), describe_every=3600, describe_first=3600)
+        l.start()
+        return t, l
+
+    def test_describe_reports_names_layout_and_sources_without_any_content(self):
+        t, l = self.listener()
+        self.addCleanup(l.stop)
+        t.handle_line(self.CEF_LINE)                                    # allowed format, but no ssid -> unusable
+        l._ingest("192.0.2.77", self.CEF_LINE)                          # not allowed -> dropped, by address
+        lines = l.describe()
+        text = "\n".join(lines)
+        self.assertIn("clearpass fields seen (names only)", text)
+        self.assertIn("clearpass records not usable", text)
+        self.assertIn("192.0.2.77=1", text)
+        for secret in ["zz-a", "zz-b", "example.test", "AA-BB-CC-00-00-01", "PantherNet"]:
+            self.assertNotIn(secret, text)
+        self.assertEqual(l.describe(), [])                              # nothing new, nothing logged again
+
+    def test_describe_logs_again_when_something_changes(self):
+        t, l = self.listener()
+        self.addCleanup(l.stop)
+        l._ingest("192.0.2.77", "x")
+        self.assertEqual(len(l.describe()), 1)
+        l._ingest("192.0.2.78", "x")
+        self.assertEqual(len(l.describe()), 1)
+
+    def test_a_dropped_tcp_stranger_is_counted_by_address(self):
+        t, l = self.listener()
+        self.addCleanup(l.stop)
+        c = socket.create_connection(("127.0.0.1", l.tcp_port))
+        c.close()
+        self.assertTrue(wait_for(lambda: t.dropped >= 1))
+        self.assertEqual(t.dropped_sources()[0][0], "127.0.0.1")
 
 
 class CollectorIntegration(unittest.TestCase):
