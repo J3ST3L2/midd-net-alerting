@@ -84,15 +84,17 @@ class Dashboards(unittest.TestCase):
                     found += 1
         self.assertGreater(found, 5)
 
-    def test_pantherNet_trends_cover_two_weeks(self):
-        panels = {p["title"]: p for p in build.build()["mist-wireless.json"]["panels"]}
-        trends = [p for t, p in panels.items() if "PantherNet" in t or "Fallback" in t]
-        charts = [p for p in trends if p["type"] == "timeseries"]
+    def test_wireless_opens_on_seven_days_and_charts_follow_the_time_picker(self):
+        dash = build.build()["mist-wireless.json"]
+        self.assertEqual(dash["time"]["from"], "now-7d")
+        for p in dash["panels"]:
+            self.assertNotIn("timeFrom", p, p["title"])         # no panel pins its own range
+        charts = [p for p in dash["panels"] if p["type"] == "timeseries" and
+                  ("PantherNet" in p["title"] or "Fallback" in p["title"])]
         self.assertGreaterEqual(len(charts), 4)
-        for p in charts:
-            self.assertEqual(p.get("timeFrom"), "14d", p["title"])
-        # the rest of the dashboard keeps the dashboard's own time range
-        self.assertNotIn("timeFrom", panels["Clients over time"])
+        # the other dashboards keep the usual 6 hour default
+        others = [d["time"]["from"] for n, d in build.build().items() if n != "mist-wireless.json"]
+        self.assertEqual(set(others), {"now-6h"})
 
     def test_no_panel_overlap(self):
         for name, d in build.build().items():

@@ -131,12 +131,12 @@ def variable(name, label, query, multi=True, include_all=True):
                if include_all else {})}
 
 
-def dashboard(uid, title, panels, variables, desc):
+def dashboard(uid, title, panels, variables, desc, time_from="now-6h"):
     for i, p in enumerate(panels, 1):
         p["id"] = i
     return {"uid": uid, "title": title, "description": desc, "tags": ["mist"], "timezone": "browser",
             "schemaVersion": 39, "version": 1, "editable": False, "graphTooltip": 1,
-            "refresh": "1m", "time": {"from": "now-6h", "to": "now"},
+            "refresh": "1m", "time": {"from": time_from, "to": "now"},
             "templating": {"list": variables}, "annotations": {"list": []}, "panels": panels,
             "links": [{"title": "Mist dashboards", "type": "dashboards", "tags": ["mist"],
                        "asDropdown": False, "includeVars": False, "keepTime": True}]}
@@ -222,8 +222,9 @@ PN_FALLBACK_DEF = ("A client falls back when a counted PantherNet failure is fol
                    "Clients with no username are excluded.")
 
 
-PN_TREND_NOTE = ("Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days "
-                 "(history builds from when the exporter first ran, and is held back while a restart reloads it).")
+PN_TREND_NOTE = ("Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; "
+                 "widen the time picker to look further back (Prometheus keeps 180 days, building from when the "
+                 "exporter first ran). Counts are held back while a restart reloads the history.")
 
 
 def row(title, y):
@@ -273,11 +274,18 @@ def pn_adoption(y):
     ]
     for panel_ in p:
         if panel_["type"] == "timeseries":
-            panel_["timeFrom"] = "14d"          # a panel-level range, independent of the dashboard time picker
             panel_["description"] = (panel_["description"] + " " + PN_TREND_NOTE).strip()
     overrides = p[2]["fieldConfig"]["overrides"]
     overrides.append({"matcher": {"id": "byName", "options": "Unique users"},
                       "properties": [{"id": "custom.axisPlacement", "value": "right"}]})
+    # Added after the trend note is applied: this one is progress, not a trailing-24-hour value.
+    p.append(timeseries("Lookups pending over time", 0, top + 24, 24, 6,
+                        [target("sum by (stage) (mist_pn_lookups_pending)", "{{stage}}")],
+                        "Work still queued for Mist lookups: 'username' is failing devices whose user is not yet "
+                        "known, 'connections' is users whose MiddleburyCollege connections are not yet checked. "
+                        "A falling line means the history is loading (about 24 lookups a minute); a flat line "
+                        "means it is stalled. It rises briefly as usernames resolve, because each one adds a "
+                        "connections lookup."))
     return p
 
 
@@ -319,7 +327,8 @@ def wireless():
     link_series(p, "Busiest APs", DEVICE_FROM_SERIES)
     link_series(p, "Clients by site", SITE_FROM_SERIES)
     link_columns(p, "Offline access points", {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
-    return dashboard("mist-wireless", "Mist Wireless", p, [SITE_VAR], "Wireless client load across the Mist org.")
+    return dashboard("mist-wireless", "Mist Wireless", p, [SITE_VAR], "Wireless client load across the Mist org.",
+                     time_from="now-7d")
 
 
 def load():

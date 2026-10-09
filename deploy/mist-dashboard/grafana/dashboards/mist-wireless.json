@@ -748,7 +748,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Unique client devices seen on each SSID in the last 24 hours. Devices, not people: a client using a different random MAC per SSID counts once on each. Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days (history builds from when the exporter first ran, and is held back while a restart reloads it).",
+      "description": "Unique client devices seen on each SSID in the last 24 hours. Devices, not people: a client using a different random MAC per SSID counts once on each. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -807,7 +807,6 @@
           "refId": "A"
         }
       ],
-      "timeFrom": "14d",
       "title": "Unique clients: PantherNet vs MiddleburyCollege (24 h)",
       "type": "timeseries"
     },
@@ -816,7 +815,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Failure events (left) and the unique users behind them (right). One failing device retries about six times, so events overstate the problem. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted. Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days (history builds from when the exporter first ran, and is held back while a restart reloads it).",
+      "description": "Failure events (left) and the unique users behind them (right). One failing device retries about six times, so events overstate the problem. Counted failures are PantherNet auth-failure events with reason 23 (802.1X failed, or '802.1x Auth Fail' text) or reason 15 (4-way handshake timeout). Other reasons are shown separately and not counted. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -898,7 +897,6 @@
           "refId": "B"
         }
       ],
-      "timeFrom": "14d",
       "title": "PantherNet auth failures (24 h)",
       "type": "timeseries"
     },
@@ -907,7 +905,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days (history builds from when the exporter first ran, and is held back while a restart reloads it).",
+      "description": "A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -966,7 +964,6 @@
           "refId": "A"
         }
       ],
-      "timeFrom": "14d",
       "title": "Fallback to MiddleburyCollege: clients",
       "type": "timeseries"
     },
@@ -975,7 +972,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Fallback clients divided by failing clients old enough to judge. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment; the chart covers the last 14 days (history builds from when the exporter first ran, and is held back while a restart reloads it).",
+      "description": "Fallback clients divided by failing clients old enough to judge. A client falls back when a counted PantherNet failure is followed by a MiddleburyCollege connection by the same username within 30 minutes. It is judged only after those 30 minutes have passed, so this lags by that long. 'device' also requires the same OS and model. Clients with no username are excluded. Each point is the trailing 24-hour value at that moment. The dashboard opens on 7 days; widen the time picker to look further back (Prometheus keeps 180 days, building from when the exporter first ran). Counts are held back while a restart reloads the history.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1035,7 +1032,6 @@
           "refId": "A"
         }
       ],
-      "timeFrom": "14d",
       "title": "Fallback to MiddleburyCollege: share of failing clients",
       "type": "timeseries"
     },
@@ -1365,6 +1361,73 @@
       ],
       "title": "Judged clients",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Work still queued for Mist lookups: 'username' is failing devices whose user is not yet known, 'connections' is users whose MiddleburyCollege connections are not yet checked. A falling line means the history is loading (about 24 lookups a minute); a flat line means it is stalled. It rises briefly as usernames resolve, because each one adds a connections lookup.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (stage) (mist_pn_lookups_pending)",
+          "format": "time_series",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Lookups pending over time",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",
@@ -1400,7 +1463,7 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-7d",
     "to": "now"
   },
   "timezone": "browser",
