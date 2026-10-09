@@ -8,7 +8,7 @@ import logging
 import threading
 import time
 
-from . import pn_fallback
+from . import clearpass_pn, pn_fallback
 from .metrics import Family, alarm_families, device_families, render, site_ap_families, sle_families, wireless_families
 from .mist_api import MistError
 
@@ -31,6 +31,10 @@ class Collector:
         self._due = {s: 0.0 for s in SOURCES}
         self._fallback = pn_fallback.Tracker(cfg.fallback_window_s, cfg.fallback_lookback_h * 3600,
                                              cfg.pn_ssid, cfg.mc_ssid)
+        self.clearpass = clearpass_pn.ClearPassTracker(
+            cfg.pn_ssid, cfg.mc_ssid, cfg.fallback_window_s, cfg.fallback_lookback_h * 3600,
+            cfg.clearpass_min_history_h * 3600,
+            [c.strip() for c in cfg.clearpass_noise_codes.split(",") if c.strip()], clock)
         if not cfg.fallback_enabled:
             self._due["fallback"] = float("inf")
 
@@ -140,7 +144,8 @@ class Collector:
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
-                    + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families())
+                    + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()
+                    + self.clearpass.families())
         families += [
             Family("mist_exporter_last_success_timestamp_seconds",
                    "Unix time of the last successful Mist refresh, per source.", "gauge",

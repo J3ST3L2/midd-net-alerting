@@ -21,6 +21,7 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
     throughput), the APs behind coverage and capacity problems, APs that dropped offline or rebooted,
     and band share. Start here for a "wifi is bad in building X" complaint.
   - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
+  - *Aruba PantherNet*: PantherNet adoption on the Aruba APs from ClearPass, beside Mist and combined (see below).
 - Only Grafana publishes a port, and only on loopback. Exporter and Prometheus are on a private
   Docker network.
 
@@ -150,6 +151,96 @@ Metrics: `mist_pn_unique_clients{ssid}`, `mist_pn_auth_failure_events`, `mist_pn
 `mist_pn_fallback_clients{match}`, `mist_pn_fallback_rate{match}`, `mist_pn_failure_reason_events{reason}`,
 `mist_pn_lookups_pending{stage}`, `mist_pn_fallback_window_seconds`, `mist_pn_backfill_complete`.
 `mist_exporter_*` metrics include `source="fallback"`.
+
+## Aruba / ClearPass (Aruba PantherNet dashboard)
+
+PantherNet adoption on the Aruba APs that remain, from **ClearPass** authentication records. The Mist
+numbers cannot see these clients, so without this the campus-wide share is understated. The **Aruba
+PantherNet** dashboard shows PantherNet's share of unique clients for Mist, Aruba and combined, plus the
+same failure and fallback panels as the Mist row.
+
+**How it works.** ClearPass is the RADIUS server and already knows, for every authentication, the
+username, the client MAC and the SSID. It pushes those records over syslog to the exporter on gravitron,
+which keeps the last 24 hours in memory. No Mist-style lookups are needed because the username is on the
+record, but ClearPass cannot replay history either, so the Aruba counts are **withheld until a full 24 hours
+of records have arrived** and an exporter restart leaves a gap in the Aruba charts (never a false dip).
+There is no AirWave or ClearPass API account in v1; they are not needed.
+
+**Definitions** are the same as the Mist row: a failure is a rejected authentication on PantherNet; a
+fallback is a failure followed by a MiddleburyCollege success by the same normalised username within
+`FALLBACK_WINDOW_S`, judged only after the window has passed. Matching is by username only (there is no OS or
+model on these records). **Fallback can only be seen if MiddleburyCollege authenticates through ClearPass
+too**; if it uses a PSK or an open portal there is no success record to match, and the fallback panels will
+stay at zero.
+
+### What has to be created (one-time)
+
+| Who | What |
+|---|---|
+| ClearPass admin | **Syslog target**: Administration > External Servers > Syslog Targets. Host = gravitron's address, protocol UDP (or TCP), port 5514. |
+| ClearPass admin | **Syslog export filters**: Administration > External Servers > Syslog Export Filters ([Aruba docs](https://arubanetworking.hpe.com/techdocs/ClearPass/6.12/PolicyManager/Content/CPPM_UserGuide/Admin/syslogExportFilters.html)). Two filters, both pointing at the target above: **Insight Logs / "Radius Authentications"** (successes) and **Insight Logs / "Radius Failed Authentications"** (failures). Include the RADIUS data so the SSID (`Aruba-Essid-Name`) is on each record. Format CEF if offered. A filter supports one template and one group, hence two filters. Names vary slightly between ClearPass versions. |
+| Network / firewall | Allow the ClearPass server address(es) to reach gravitron on **UDP and TCP 5514**. |
+| Whoever runs gravitron | Set the `.env` values below and `docker compose up -d`. |
+
+No API client, no AirWave account, and no change on the Aruba controllers are needed.
+
+### Turn it on (gravitron)
+
+Docker publishes ports around `firewalld`, so the real protection is the exporter's own allow-list (records
+from any other address are dropped unparsed and counted) and binding the port to one address. The listener
+**refuses to start without `CLEARPASS_ALLOW`**, and the port is bound to loopback until
+`CLEARPASS_SYSLOG_BIND` is set.
+
+```bash
+cat >> .env <<'EOF'
+CLEARPASS_SYSLOG_ENABLED=true
+CLEARPASS_ALLOW=<clearpass address>[,<second address>]
+CLEARPASS_SYSLOG_BIND=<gravitron address ClearPass sends to>
+EOF
+sudo docker compose up -d --force-recreate exporter
+sudo docker compose logs --tail 5 exporter     # "clearpass syslog listening on ..."
+```
+
+Restarting the exporter restarts the Mist PantherNet history load too, so do this when that has finished.
+
+### Check it
+
+```bash
+sudo docker exec mist-prometheus wget -qO- http://exporter:9877/metrics | grep -E '^aruba_pn_(events|unmapped|dropped|history)'
+```
+
+- `aruba_pn_events_received_total` rising: records are arriving and usable.
+- `aruba_pn_unmapped_events_total` rising fast: records arrive but the SSID, username or MAC could not be
+  found. The exporter logs the **field names** it has seen (never values) every 10 minutes
+  (`clearpass fields seen (names only): ...`); send that list so the mapping can be adjusted.
+- `aruba_pn_dropped_events_total` above zero: records from an address not in `CLEARPASS_ALLOW`.
+
+### Limits and handling
+
+- **Not yet verified against real ClearPass records.** The parser matches fields by normalised name from
+  candidate lists and accepts CEF or plain `key=value`, but the exact field names depend on the export
+  template. Expect one round of mapping once real records arrive; the unusable-records tile and the field-name
+  log are there for that.
+- **No history.** The first 24 hours after enabling (and after each restart) the counts are blank; the Feed
+  age and History tiles show it is working.
+- **Syslog is cleartext** (UDP/TCP, no TLS in v1) and carries usernames. It stays on the campus network between
+  ClearPass and gravitron, but confirm that is acceptable under the data classification policy. The allow-list
+  is not authentication: syslog has none, and a UDP source address can be forged by another host on the same
+  network, so treat the feed as trusted-network only. Memory is capped, so a flood cannot exhaust the exporter.
+- **If every record is "dropped"** even though the address is listed, Docker may be rewriting the source
+  address of published ports. Check the address the exporter sees; the fix is host networking for the exporter.
+- **Privacy** is as on the Mist side: usernames and MACs live in memory only, are never a metric label and
+  are never logged. Failure reasons are ClearPass error codes (top 12, the rest "other"); look them up in
+  ClearPass and list any that are noise in `CLEARPASS_NOISE_CODES`.
+
+| Setting (`.env`) | Default | Meaning |
+|---|---|---|
+| `CLEARPASS_SYSLOG_ENABLED` | `false` | turns the listener on |
+| `CLEARPASS_ALLOW` | empty | ClearPass source addresses or networks; required |
+| `CLEARPASS_SYSLOG_BIND` | `127.0.0.1` | gravitron address the port is published on |
+| `CLEARPASS_SYSLOG_HOST_PORT` | `5514` | host port (the container always listens on 5514) |
+| `CLEARPASS_MIN_HISTORY_H` | `24` | hours of records before counts are shown |
+| `CLEARPASS_NOISE_CODES` | empty | error codes not counted as PantherNet failures |
 
 ## Known limits
 

@@ -131,10 +131,10 @@ def variable(name, label, query, multi=True, include_all=True):
                if include_all else {})}
 
 
-def dashboard(uid, title, panels, variables, desc, time_from="now-6h"):
+def dashboard(uid, title, panels, variables, desc, time_from="now-6h", tags=("mist",)):
     for i, p in enumerate(panels, 1):
         p["id"] = i
-    return {"uid": uid, "title": title, "description": desc, "tags": ["mist"], "timezone": "browser",
+    return {"uid": uid, "title": title, "description": desc, "tags": list(tags), "timezone": "browser",
             "schemaVersion": 39, "version": 1, "editable": False, "graphTooltip": 1,
             "refresh": "1m", "time": {"from": time_from, "to": "now"},
             "templating": {"list": variables}, "annotations": {"list": []}, "panels": panels,
@@ -583,9 +583,80 @@ def wifi_view():
                      "Where wifi is degraded: client experience by site, the APs behind it, and AP stability.")
 
 
+PN_BOTH = 'ssid=~"PantherNet|MiddleburyCollege"'
+ARUBA_NOTE = ("From ClearPass authentication records (Aruba APs). Counts are withheld until a full 24 hours of "
+              "records have been received, because there is no history to backfill; after an exporter restart "
+              "the Aruba charts show a gap, not a false dip.")
+
+
+def _share(pn, both):
+    return "100 * %s / %s" % (pn, both)
+
+
+def aruba_pn_view():
+    mist_pn, mist_all = 'mist_pn_unique_clients{ssid="PantherNet"}', "sum(mist_pn_unique_clients{%s})" % PN_BOTH
+    ar_pn, ar_all = 'aruba_pn_unique_clients{ssid="PantherNet"}', "sum(aruba_pn_unique_clients{%s})" % PN_BOTH
+    pct = steps((BLUE, None))
+    p = [
+        stat("PantherNet share: Mist", 0, 0, 5, _share(mist_pn, mist_all), "PantherNet's share of unique clients "
+             "on PantherNet + MiddleburyCollege, on Juniper Mist APs (24 h).", unit="percent", thresholds=pct),
+        stat("PantherNet share: Aruba", 5, 0, 5, _share(ar_pn, ar_all), "The same share on Aruba APs (24 h). "
+             + ARUBA_NOTE, unit="percent", thresholds=pct),
+        stat("PantherNet share: campus", 10, 0, 5,
+             _share("(sum(%s) + sum(%s))" % (mist_pn, ar_pn), "(%s + %s)" % (mist_all, ar_all)),
+             "Both systems combined. A device seen on both is counted once per system, so this is approximate. "
+             "Blank until the Aruba feed has a full 24 hours.", unit="percent", thresholds=pct),
+        stat("Feed age", 15, 0, 5, "time() - aruba_pn_last_event_timestamp_seconds",
+             "Seconds since ClearPass last sent a usable record. A working feed sends one every few seconds; a "
+             "growing number means ClearPass has stopped sending.", unit="s",
+             thresholds=steps((GREEN, None), (AMBER, 300), (RED, 900)), color_mode="background"),
+        stat("History", 20, 0, 4, "aruba_pn_history_complete",
+             "Collecting until 24 hours of ClearPass records have arrived; the counts below stay blank until then.",
+             mappings=[{"type": "value", "options": {"1": {"text": "Loaded", "color": GREEN},
+                                                      "0": {"text": "Collecting", "color": AMBER}}}],
+             thresholds=steps((AMBER, None), (GREEN, 1)), color_mode="background"),
+
+        timeseries("Unique clients: PantherNet vs MiddleburyCollege (Aruba, 24 h)", 0, 4, 12, 8,
+                   [target("aruba_pn_unique_clients", "{{ssid}}")],
+                   "Unique client devices with a successful authentication in the last 24 hours. Devices, not "
+                   "people. " + ARUBA_NOTE),
+        timeseries("PantherNet auth failures (Aruba, 24 h)", 12, 4, 12, 8,
+                   [target("aruba_pn_auth_failure_events", "Failure events"),
+                    target("aruba_pn_auth_failure_clients", "Unique users", ref="B")],
+                   "Rejected PantherNet authentications (left) and the unique users behind them (right). "
+                   "A failing client retries, so events overstate the problem. " + ARUBA_NOTE),
+        timeseries("Fallback to MiddleburyCollege: clients (Aruba)", 0, 12, 12, 8,
+                   [target('aruba_pn_fallback_clients', "{{match}}")], PN_FALLBACK_DEF.replace(
+                       " 'device' also requires the same OS and model.", "") + " " + ARUBA_NOTE),
+        timeseries("Fallback to MiddleburyCollege: share of failing clients (Aruba)", 12, 12, 12, 8,
+                   [target("aruba_pn_fallback_rate", "{{match}}")],
+                   "Fallback clients divided by failing clients old enough to judge. " + ARUBA_NOTE,
+                   unit="percentunit", max_=1),
+        bargauge("Why PantherNet auth fails (Aruba, 24 h)", 0, 20, 12, 8,
+                 "sort_desc(aruba_pn_failure_reason_events)", "ClearPass error {{reason}}",
+                 "PantherNet rejects by ClearPass error code (top 12; the rest are 'other'). Look the codes up in "
+                 "ClearPass; once you know which are noise, list them in CLEARPASS_NOISE_CODES."),
+        stat("Records per minute", 12, 20, 6, "60 * rate(aruba_pn_events_received_total[5m])",
+             "Usable ClearPass records arriving. Zero means the feed is down or not configured."),
+        stat("Judged clients", 18, 20, 6, 'sum(aruba_pn_fallback_eligible_clients{match="user"})',
+             "Failing users old enough to judge: the denominator of the fallback share."),
+        stat("Unusable records (1 h)", 12, 24, 6, "increase(aruba_pn_unmapped_events_total[1h])",
+             "Records that were not authentication results or had no SSID / username / MAC. A large number "
+             "means the ClearPass export template needs its field names mapped (see the exporter log).",
+             thresholds=steps((GREEN, None), (AMBER, 100))),
+        stat("Dropped (1 h)", 18, 24, 6, "increase(aruba_pn_dropped_events_total[1h])",
+             "Records from a source address that is not in CLEARPASS_ALLOW. Should be zero.",
+             thresholds=steps((GREEN, None), (RED, 1)), color_mode="background"),
+    ]
+    return dashboard("aruba-pn", "Aruba PantherNet", p, [],
+                     "PantherNet adoption on Aruba APs, from ClearPass, beside Mist and combined.",
+                     time_from="now-7d", tags=("mist", "aruba"))
+
+
 def build():
     return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
-            "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view()}
+            "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view(),
+            "aruba-pn.json": aruba_pn_view()}
 
 
 def render(d):
