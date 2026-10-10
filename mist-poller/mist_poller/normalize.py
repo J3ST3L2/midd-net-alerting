@@ -163,10 +163,20 @@ def card_reason(text):
     return "\n".join(lines)
 
 
+# Red means the thing is down or unreachable; every other firing alert is amber.
+DOWN_TYPES = {"device_down", "switch_down", "gateway_down", "mist_edge_disconnected"}
+RED, AMBER = "#ff3131", "#ffb000"
+
+
+def card_color(event_type):
+    return RED if event_type in DOWN_TYPES else AMBER
+
+
 def with_card_labels(payload):
-    """Return a copy of the Keep payload with the label the Slack cards render."""
+    """Return a copy of the Keep payload with the labels the Slack cards render."""
     labels = dict(payload.get("labels") or {})
     labels["mist_reason_card"] = card_reason(labels.get("mist_reason", "")) or "n/a"
+    labels["mist_card_color"] = card_color(labels.get("mist_event_type", ""))
     return dict(payload, labels=labels)
 
 

@@ -69,7 +69,7 @@ workflow:
               value: results.slack_timestamp
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "#ff3131"
+              color: "{{ alert.labels.mist_card_color }}"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status
@@ -114,7 +114,7 @@ workflow:
           slack_timestamp: "{{ alert.slack_timestamp_mist_wifi_v1 }}"
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "#ff3131"
+              color: "{{ alert.labels.mist_card_color }}"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status

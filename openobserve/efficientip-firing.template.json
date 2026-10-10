@@ -3,6 +3,7 @@
     "name": "EfficientIP: {alert_name}",
     "status": "firing",
     "severity": "critical",
+    "card_color": "#ff3131",
     "source": ["efficientip"],
     "fingerprint": "efficientip:openobserve:{alert_name}",
     "hostname": "{host}",
