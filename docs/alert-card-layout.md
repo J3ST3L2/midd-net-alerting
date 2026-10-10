@@ -22,6 +22,19 @@ Started / Recovered: ...                 time at the end
 - **Resolved cards keep the firing details** (host, object, relay, reason) saved with `enrich_alert`
   when the red card was posted, so the green card is not emptier than the red one.
 
+## Colors
+
+- **Red (`#ff3131`)**: the thing is down or unreachable.
+- **Amber (`#ffb000`)**: needs a look, but nothing is out (PEM alarms, reboots, port flaps, capacity, licences).
+- **Green (`#39ff14`)**: resolved.
+
+The source decides red or amber and sends it with the alert, so the workflows only render it:
+Mist poller `card_color()` in `mist-poller/mist_poller/normalize.py` (label `mist_card_color`; red for
+`device_down`, `switch_down`, `gateway_down`, `mist_edge_disconnected`), LibreNMS Blade template
+(`card_color`; red when the rule name says down, unreachable or offline), EfficientIP (`card_color` in
+the OpenObserve firing template and `eip_trap_handler.py`; red for lease exhaustion and DHCP cluster
+failure).
+
 ## Adding a new source (for example ClearPass)
 
 Copy a workflow from `keep/workflows/`, keep the header, the `Status` row and the field order above,

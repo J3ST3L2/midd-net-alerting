@@ -67,7 +67,7 @@ workflow:
               value: "{{ alert.message }}"
           attachments:
             - fallback: "{{ alert.hostname }} - {{ alert.event }} • Ongoing"
-              color: "#ff3131"
+              color: "{{ alert.card_color }}"
               author_name: "{{ alert.hostname }} - {{ alert.event }}"
               fields:
                 - title: Status

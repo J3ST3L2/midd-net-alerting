@@ -1,6 +1,6 @@
 import unittest
 
-from mist_poller.normalize import card_reason, with_card_labels
+from mist_poller.normalize import AMBER, RED, card_color, card_reason, with_card_labels
 
 
 class CardReasonTest(unittest.TestCase):
@@ -30,6 +30,16 @@ class CardReasonTest(unittest.TestCase):
         self.assertNotIn("mist_reason_card", src["labels"])
         self.assertEqual(out["labels"]["mist_reason"], "LINK_DOWN: a")
         self.assertEqual(out["name"], "x")
+
+    def test_red_only_for_down_events(self):
+        for typ in ("device_down", "switch_down", "gateway_down", "mist_edge_disconnected"):
+            self.assertEqual(card_color(typ), RED)
+        for typ in ("sw_alarm_chassis_pem", "vc_master_changed", "port_flap", "bad_cable", ""):
+            self.assertEqual(card_color(typ), AMBER)
+
+    def test_label_added_for_card(self):
+        p = with_card_labels({"labels": {"mist_event_type": "switch_down", "mist_reason": ""}})
+        self.assertEqual(p["labels"]["mist_card_color"], RED)
 
 
 if __name__ == "__main__":

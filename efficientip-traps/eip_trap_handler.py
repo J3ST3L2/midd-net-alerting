@@ -17,6 +17,8 @@ import urllib.request
 KEEP_URL = "https://keep.middlebury.edu/backend/alerts/event"
 RAW_LOG = "/var/log/eip-traps.log"
 TRAP_OID_KEYS = ("snmpTrapOID.0", "1.3.6.1.6.3.1.1.4.1.0")
+RED, AMBER = "#ff3131", "#ffb000"
+RED_ALERTS = {"7"}   # DHCP CLUSTER failures: red; every other trap alert is amber
 CLEARED_WORDS = ("released", "cleared", "normal", "recovered", "closed")
 
 # We choose the OIDs entered in each SOLIDserver alert definition:
@@ -63,6 +65,7 @@ def build_event(host, ip, trap, varbinds):
             "name": "EfficientIP: %s" % name,
             "status": "resolved" if cleared else "firing",
             "severity": "info" if cleared else "warning",
+            "card_color": RED if m.group(1) in RED_ALERTS else AMBER,
             "source": ["efficientip"],
             "fingerprint": "efficientip:trap:%s:%s" % (ip, m.group(1)),
             "hostname": host,
@@ -80,6 +83,7 @@ def build_event(host, ip, trap, varbinds):
         "name": "EfficientIP trap: %s" % trap,
         "status": "resolved" if cleared else "firing",
         "severity": "info" if cleared else "warning",
+        "card_color": AMBER,
         "source": ["efficientip"],
         "fingerprint": "efficientip:trap:%s:%s" % (ip, key),
         "hostname": host,
