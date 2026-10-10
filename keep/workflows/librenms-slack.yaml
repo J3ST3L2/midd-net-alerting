@@ -99,8 +99,8 @@ workflow:
                   short: true
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
-    - name: slack-firing-net
-      if: "not '{{ alert.slack_timestamp_net_v2 }}' and '{{ alert.status }}' == 'firing'"
+    - name: slack-firing-net-red
+      if: "not '{{ alert.slack_timestamp_net_v2 }}' and '{{ alert.status }}' == 'firing' and (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -142,8 +142,51 @@ workflow:
                   short: true
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
-    - name: slack-firing-nms
-      if: "not '{{ alert.slack_timestamp_nms_v2 }}' and '{{ alert.status }}' == 'firing'"
+    - name: slack-firing-net-amber
+      if: "not '{{ alert.slack_timestamp_net_v2 }}' and '{{ alert.status }}' == 'firing' and not (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0C4MSELS4D
+          enrich_alert:
+            - key: slack_timestamp_net_v2
+              value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
+            - key: fired_hardware
+              value: "{{ alert.hardware }}"
+            - key: fired_software
+              value: "{{ alert.software }}"
+          attachments:
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
+              color: "#ffb000"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
+                - title: Hardware
+                  value: "{{ alert.hardware }}"
+                  short: true
+                - title: Software
+                  value: "{{ alert.software }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-nms-red
+      if: "not '{{ alert.slack_timestamp_nms_v2 }}' and '{{ alert.status }}' == 'firing' and (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -161,6 +204,49 @@ workflow:
           attachments:
             - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
               color: "#ff3131"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
+                - title: Hardware
+                  value: "{{ alert.hardware }}"
+                  short: true
+                - title: Software
+                  value: "{{ alert.software }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+              footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-nms-amber
+      if: "not '{{ alert.slack_timestamp_nms_v2 }}' and '{{ alert.status }}' == 'firing' and not (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0AHUT40W0Z
+          enrich_alert:
+            - key: slack_timestamp_nms_v2
+              value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
+            - key: fired_hardware
+              value: "{{ alert.hardware }}"
+            - key: fired_software
+              value: "{{ alert.software }}"
+          attachments:
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
+              color: "#ffb000"
               author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
