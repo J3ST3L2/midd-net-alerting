@@ -57,8 +57,8 @@ workflow:
                   short: true
               footer: "Mist Infrastructure • Keep"
 
-    - name: slack-firing-infra
-      if: "not '{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap'"
+    - name: slack-firing-infra-red
+      if: "not '{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap' and ('{{ alert.labels.mist_event_type }}' in ('device_down', 'switch_down', 'gateway_down', 'mist_edge_disconnected'))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -104,9 +104,56 @@ workflow:
                   short: true
               footer: "Mist Infrastructure • Keep"
 
+    - name: slack-firing-infra-amber
+      if: "not '{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap' and not ('{{ alert.labels.mist_event_type }}' in ('device_down', 'switch_down', 'gateway_down', 'mist_edge_disconnected'))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C07U6UYANV8
+          enrich_alert:
+            - key: slack_timestamp_mist_infra_v1
+              value: results.slack_timestamp
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
+              color: "#ffb000"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.labels.mist_reason_card }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: IP
+                  value: "{{ alert.labels.mist_ip }}"
+                  short: true
+                - title: Model
+                  value: "{{ alert.labels.mist_model }}"
+                  short: true
+                - title: Firmware
+                  value: "{{ alert.labels.mist_firmware }}"
+                  short: true
+                - title: Last seen by Mist
+                  value: "{{ alert.labels.mist_last_seen }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Infrastructure • Keep"
 
-    - name: slack-refresh-infra
-      if: "'{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap' and '{{ alert.labels.mist_refresh }}' == 'true'"
+
+    - name: slack-refresh-infra-red
+      if: "'{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap' and '{{ alert.labels.mist_refresh }}' == 'true' and ('{{ alert.labels.mist_event_type }}' in ('device_down', 'switch_down', 'gateway_down', 'mist_edge_disconnected'))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -116,6 +163,51 @@ workflow:
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
               color: "#ff3131"
+              author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: State
+                  value: "{{ alert.labels.mist_state }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.labels.mist_reason_card }}"
+                  short: false
+                - title: Site
+                  value: "{{ alert.labels.mist_site_name }}"
+                  short: true
+                - title: MAC
+                  value: "{{ alert.labels.mist_mac }}"
+                  short: true
+                - title: IP
+                  value: "{{ alert.labels.mist_ip }}"
+                  short: true
+                - title: Model
+                  value: "{{ alert.labels.mist_model }}"
+                  short: true
+                - title: Firmware
+                  value: "{{ alert.labels.mist_firmware }}"
+                  short: true
+                - title: Last seen by Mist
+                  value: "{{ alert.labels.mist_last_seen }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.lastReceived }}"
+                  short: true
+              footer: "Mist Infrastructure • Keep"
+
+    - name: slack-refresh-infra-amber
+      if: "'{{ alert.slack_timestamp_mist_infra_v1 }}' and '{{ alert.status }}' == 'firing' and '{{ alert.labels.mist_event_type }}' != 'port_flap' and '{{ alert.labels.mist_refresh }}' == 'true' and not ('{{ alert.labels.mist_event_type }}' in ('device_down', 'switch_down', 'gateway_down', 'mist_edge_disconnected'))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C07U6UYANV8
+          slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
+          attachments:
+            - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
+              color: "#ffb000"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status
