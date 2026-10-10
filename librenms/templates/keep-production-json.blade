@@ -21,14 +21,24 @@
         }
     }
 
+    // Some rules (for example "Device rebooted") hand back a dump of device fields instead of a fault:
+    // "sysObjectID = ...; snmpEngineID = ...; sysDescr = ...". That is noise, not a reason.
+    $faultLines = array_values(array_filter($faultLines, function ($line) {
+        return !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', $line);
+    }));
+
     // Only real fault text counts as a reason. Never echo the rule name (it duplicates the Issue line).
     // On recovery LibreNMS has no faults, so the workflow shows the reason saved when the alert fired.
     if ($alert->state == 0) {
         $reason = '';
     } else {
         $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) : '';
-        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName) {
+        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName
+            && !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', (string) $msg)) {
             $reason = trim((string) $msg);
+        }
+        if ($reason === '' && preg_match('/reboot/i', (string) $ruleName)) {
+            $reason = 'Device restarted (its uptime counter was reset)';
         }
         if ($reason === '') { $reason = 'n/a'; }
     }
