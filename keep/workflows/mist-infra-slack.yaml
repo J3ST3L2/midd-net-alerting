@@ -69,7 +69,7 @@ workflow:
               value: results.slack_timestamp
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "{{ alert.labels.mist_card_color }}"
+              color: "#ff3131"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status
@@ -115,7 +115,7 @@ workflow:
           slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "{{ alert.labels.mist_card_color }}"
+              color: "#ff3131"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status
@@ -161,7 +161,7 @@ workflow:
               value: results.slack_timestamp
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "{{ alert.labels.mist_card_color }}"
+              color: "#ffb000"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status
@@ -206,7 +206,7 @@ workflow:
           slack_timestamp: "{{ alert.slack_timestamp_mist_infra_v1 }}"
           attachments:
             - fallback: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }} • Ongoing"
-              color: "{{ alert.labels.mist_card_color }}"
+              color: "#ffb000"
               author_name: "{{ alert.labels.mist_device }} - {{ alert.labels.mist_event_type }}"
               fields:
                 - title: Status

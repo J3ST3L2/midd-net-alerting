@@ -117,7 +117,7 @@ workflow:
               value: "{{ alert.software }}"
           attachments:
             - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
-              color: "{{ alert.card_color }}"
+              color: "#ff3131"
               author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
@@ -160,7 +160,7 @@ workflow:
               value: "{{ alert.software }}"
           attachments:
             - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
-              color: "{{ alert.card_color }}"
+              color: "#ff3131"
               author_name: "{{ alert.device }} - {{ alert.rule }}"
               author_link: "{{ alert.url }}"
               author_icon: "{{ alert.vendor_icon }}"
