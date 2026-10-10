@@ -30,8 +30,8 @@ workflow:
                 - title: Status
                   value: "Resolved"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: Object
+                  value: "{{ alert.fired_object }}"
                   short: true
                 - title: Details
                   value: "{{ alert.message }}"
@@ -39,9 +39,6 @@ workflow:
                 - title: Was
                   value: "{{ alert.fired_message }}"
                   short: false
-                - title: Object
-                  value: "{{ alert.fired_object }}"
-                  short: true
                 - title: Relay / IP
                   value: "{{ alert.fired_ip }}"
                   short: true
@@ -76,15 +73,12 @@ workflow:
                 - title: Status
                   value: "Ongoing"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: Object
+                  value: "{{ alert.object }}"
                   short: true
                 - title: Details
                   value: "{{ alert.message }}"
                   short: false
-                - title: Object
-                  value: "{{ alert.object }}"
-                  short: true
                 - title: Relay / IP
                   value: "{{ alert.ip }}"
                   short: true

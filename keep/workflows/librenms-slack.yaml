@@ -32,23 +32,26 @@ workflow:
                 - title: Status
                   value: "Resolved"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: IP
+                  value: "{{ alert.ip }}"
                   short: true
                 - title: Reason
                   value: "{{ alert.fired_reason }}"
                   short: false
-                - title: IP
-                  value: "{{ alert.ip }}"
+                - title: Hardware
+                  value: "{{ alert.fired_hardware }}"
                   short: true
-                - title: Duration
-                  value: "{{ alert.duration }}"
+                - title: Software
+                  value: "{{ alert.fired_software }}"
                   short: true
                 - title: Started
                   value: "{{ alert.fired }}"
                   short: true
                 - title: Recovered
                   value: "{{ alert.resolved }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
                   short: true
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
@@ -73,23 +76,26 @@ workflow:
                 - title: Status
                   value: "Resolved"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: IP
+                  value: "{{ alert.ip }}"
                   short: true
                 - title: Reason
                   value: "{{ alert.fired_reason }}"
                   short: false
-                - title: IP
-                  value: "{{ alert.ip }}"
+                - title: Hardware
+                  value: "{{ alert.fired_hardware }}"
                   short: true
-                - title: Duration
-                  value: "{{ alert.duration }}"
+                - title: Software
+                  value: "{{ alert.fired_software }}"
                   short: true
                 - title: Started
                   value: "{{ alert.fired }}"
                   short: true
                 - title: Recovered
                   value: "{{ alert.resolved }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
                   short: true
               footer: "LibreNMS • Open in LibreNMS: {{ alert.url }}"
 
@@ -105,6 +111,10 @@ workflow:
               value: results.slack_timestamp
             - key: fired_reason
               value: "{{ alert.reason }}"
+            - key: fired_hardware
+              value: "{{ alert.hardware }}"
+            - key: fired_software
+              value: "{{ alert.software }}"
           attachments:
             - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
               color: "#ff3131"
@@ -115,15 +125,12 @@ workflow:
                 - title: Status
                   value: "Ongoing"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: IP
+                  value: "{{ alert.ip }}"
                   short: true
                 - title: Reason
                   value: "{{ alert.reason }}"
                   short: false
-                - title: IP
-                  value: "{{ alert.ip }}"
-                  short: true
                 - title: Hardware
                   value: "{{ alert.hardware }}"
                   short: true
@@ -147,6 +154,10 @@ workflow:
               value: results.slack_timestamp
             - key: fired_reason
               value: "{{ alert.reason }}"
+            - key: fired_hardware
+              value: "{{ alert.hardware }}"
+            - key: fired_software
+              value: "{{ alert.software }}"
           attachments:
             - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
               color: "#ff3131"
@@ -157,15 +168,12 @@ workflow:
                 - title: Status
                   value: "Ongoing"
                   short: true
-                - title: Severity
-                  value: "{{ alert.severity }}"
+                - title: IP
+                  value: "{{ alert.ip }}"
                   short: true
                 - title: Reason
                   value: "{{ alert.reason }}"
                   short: false
-                - title: IP
-                  value: "{{ alert.ip }}"
-                  short: true
                 - title: Hardware
                   value: "{{ alert.hardware }}"
                   short: true
