@@ -42,6 +42,12 @@
         if ($reason === '' && preg_match('/reboot/i', (string) $ruleName)) {
             $reason = 'Device restarted (its uptime counter was reset)';
         }
+        if ($reason === '' && preg_match('/down|unreach|offline/i', (string) $ruleName)) {
+            // LibreNMS records why it considers a device down: 'icmp' (no ping) or 'snmp' (pings, no SNMP).
+            $why = strtolower((string) ($device?->status_reason ?? ''));
+            if ($why === 'icmp') { $reason = 'No response to ping (ICMP)'; }
+            elseif ($why === 'snmp') { $reason = 'Answers ping but not SNMP'; }
+        }
         if ($reason === '') { $reason = 'n/a'; }
     }
     $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
