@@ -1,0 +1,16 @@
+[Unit]
+Description=Publish the SOLIDserver VLAN inventory to Confluence
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/eip-tools.env
+WorkingDirectory=/opt/midd-net-alerting/efficientip-tools
+ExecStart=/usr/bin/python3 vlan_inventory.py
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+TimeoutStartSec=600

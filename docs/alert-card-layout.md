@@ -27,6 +27,8 @@ Started / Recovered: ...                 time at the end
 - **Red (`#ff3131`)**: the thing is down or unreachable.
 - **Amber (`#ffb000`)**: needs a look, but nothing is out (PEM alarms, reboots, port flaps, capacity, licences).
 - **Green (`#39ff14`)**: resolved.
+- **Blue (`#2f81f7`)**: an informational change, not an alert (the SOLIDserver change log from
+  `efficientip-tools/audit_feed.py`). One-shot: it has no Ongoing/Resolved state, so `Status` says `Changed`.
 
 The source decides red or amber and sends it with the alert, so the workflows only render it:
 Mist poller `card_color()` in `mist-poller/mist_poller/normalize.py` (label `mist_card_color`; red for

@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the SOLIDserver change log feed every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,41 @@
+workflow:
+  id: middlebury-efficientip-audit-slack
+  name: Middlebury EfficientIP change log Slack
+  description: One-shot cards for SOLIDserver changes made by users, API accounts and automation (efficientip-tools/audit_feed.py), delivered through NMS-Alert-Bot to efficientip-alerts.
+  disabled: false
+
+  triggers:
+    - type: alert
+      filters:
+        - key: source
+          value: solidserver-audit
+
+  actions:
+    - name: slack-audit-efficientip
+      if: "'{{ alert.status }}' == 'firing'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0BG31RLY1H
+          attachments:
+            - fallback: "{{ alert.user }} - {{ alert.event }} • Changed"
+              color: "#2f81f7"
+              author_name: "{{ alert.user }} - {{ alert.event }}"
+              fields:
+                - title: Status
+                  value: "Changed"
+                  short: true
+                - title: Changes
+                  value: "{{ alert.count }}"
+                  short: true
+                - title: Object
+                  value: "{{ alert.object }}"
+                  short: false
+                - title: Details
+                  value: "{{ alert.details }}"
+                  short: false
+                - title: When
+                  value: "{{ alert.when }}"
+                  short: false
+              footer: "EfficientIP SOLIDserver change log • Keep"

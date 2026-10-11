@@ -99,5 +99,12 @@ class EfficientIPTests(unittest.TestCase):
             self.assertTrue(got[0].endswith(color), "%s -> %s" % (ev, got))
 
 
+class EfficientIPAuditTests(unittest.TestCase):
+    def test_change_card_posts_once_and_never_on_resolved(self):
+        f = "efficientip-audit-slack.yaml"
+        self.assertEqual(len(which(f, {"status": "firing", "user": "alice", "event": "Add: DNS RRs"})), 1)
+        self.assertEqual(which(f, {"status": "resolved"}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

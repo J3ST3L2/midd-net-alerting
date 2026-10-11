@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish the SOLIDserver VLAN inventory every hour
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=120
+Persistent=yes
+
+[Install]
+WantedBy=timers.target
