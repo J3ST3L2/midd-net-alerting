@@ -1,0 +1,17 @@
+[
+  {
+    "name": "EfficientIP: {alert_name}",
+    "status": "firing",
+    "severity": "warning",
+    "source": [
+      "efficientip"
+    ],
+    "fingerprint": "efficientip:openobserve:{alert_name}",
+    "hostname": "{host}",
+    "ip": "{peer}",
+    "event": "{alert_name}",
+    "object": "{zone}",
+    "message": "{detail:250}",
+    "alert_url": "{alert_url}"
+  }
+]

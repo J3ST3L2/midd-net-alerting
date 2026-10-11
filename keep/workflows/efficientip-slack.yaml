@@ -48,7 +48,7 @@ workflow:
               footer: "EfficientIP SOLIDserver • Keep"
 
     - name: slack-firing-efficientip-red
-      if: "not '{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'firing' and ('{{ alert.event }}' in ('DHCP_Lease_Exhaustion', 'DHCP CLUSTER failures'))"
+      if: "not '{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'firing' and ('{{ alert.event }}' in ('DHCP_Lease_Exhaustion', 'DHCP CLUSTER failures', 'DNS_Zone_Transfers_Stalled'))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -88,7 +88,7 @@ workflow:
               footer: "EfficientIP SOLIDserver • Keep"
 
     - name: slack-firing-efficientip-amber
-      if: "not '{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'firing' and not ('{{ alert.event }}' in ('DHCP_Lease_Exhaustion', 'DHCP CLUSTER failures'))"
+      if: "not '{{ alert.slack_timestamp_efficientip_v1 }}' and '{{ alert.status }}' == 'firing' and not ('{{ alert.event }}' in ('DHCP_Lease_Exhaustion', 'DHCP CLUSTER failures', 'DNS_Zone_Transfers_Stalled'))"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"

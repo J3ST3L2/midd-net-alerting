@@ -93,6 +93,8 @@ class EfficientIPTests(unittest.TestCase):
     def test_colors(self):
         f = "efficientip-slack.yaml"
         for ev, color in (("DHCP_Lease_Exhaustion", "red"), ("DHCP CLUSTER failures", "red"),
+                          ("DNS_Zone_Transfers_Stalled", "red"), ("DNS_Zone_Transfer_Failed", "amber"),
+                          ("DNS_Notify_Failed_Unknown_Target", "amber"), ("DNS_Zone_Transfer_Denied", "amber"),
                           ("Member clock drift", "amber"), ("LICENSES: subscription expiration", "amber")):
             got = which(f, {"status": "firing", "event": ev})
             self.assertEqual(len(got), 1, ev)
