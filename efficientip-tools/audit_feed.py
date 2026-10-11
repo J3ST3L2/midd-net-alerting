@@ -99,6 +99,7 @@ def normalize_event(row):
     clean, params = sanitize_params(row.get("service_param"))
     return {
         "id": int(event_id),
+        "epoch": stime,
         "time": datetime.fromtimestamp(stime, tz=timezone.utc).isoformat(),
         "user": str(row.get("usr_login") or "").strip() or "unknown",
         "service": service,
@@ -194,7 +195,7 @@ def ship_to_openobserve(events):
     if not url or not events:
         return
     stream = os.environ.get("OO_STREAM", "eip_audit")
-    docs = [{"_timestamp": int(datetime.fromisoformat(e["time"]).timestamp() * 1_000_000),
+    docs = [{"_timestamp": e["epoch"] * 1_000_000,
              "syslog_id": e["id"], "user": e["user"], "service": e["service"],
              "operation": e["operation"], "action": e["action"], "object_type": e["object_type"],
              "object_name": e["object_name"], "params": e["param_string"]} for e in events]
