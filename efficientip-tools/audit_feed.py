@@ -101,6 +101,7 @@ def normalize_event(row):
         "id": int(event_id),
         "epoch": stime,
         "time": datetime.fromtimestamp(stime, tz=timezone.utc).isoformat(),
+        "local": datetime.fromtimestamp(stime).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"),
         "user": str(row.get("usr_login") or "").strip() or "unknown",
         "service": service,
         "operation": str(row.get("service_name") or "").strip(),
@@ -137,13 +138,13 @@ def collapse(events, burst_min=10):
             first, last = evs[0], evs[-1]
             cards.append({"user": user, "service": service, "count": len(evs),
                           "ids": [e["id"] for e in evs], "first_id": first["id"],
-                          "time": last["time"],
+                          "time": last["time"], "local": last["local"],
                           "object": "%d objects (first: %s)" % (len(evs), first["object_name"] or first["object_type"]),
-                          "details": "%d x %s between %s and %s" % (len(evs), service, first["time"][11:19], last["time"][11:19])})
+                          "details": "%d x %s between %s and %s" % (len(evs), service, first["local"][11:19], last["local"][11:])})
         else:
             for e in evs:
                 cards.append({"user": user, "service": service, "count": 1, "ids": [e["id"]],
-                              "first_id": e["id"], "time": e["time"],
+                              "first_id": e["id"], "time": e["time"], "local": e["local"],
                               "object": e["object_name"] or e["object_type"],
                               "details": describe(e)})
     cards.sort(key=lambda c: c["first_id"])
@@ -174,7 +175,7 @@ def build_keep_event(card, base_url):
         "event": card["service"],
         "object": card["object"][:200],
         "details": card["details"][:500],
-        "when": card["time"],
+        "when": card["local"],
         "count": card["count"],
         "url": base_url,
     }
