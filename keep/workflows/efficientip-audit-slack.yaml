@@ -1,7 +1,7 @@
 workflow:
   id: middlebury-efficientip-audit-slack
   name: Middlebury EfficientIP change log Slack
-  description: One-shot cards for SOLIDserver changes made by users, API accounts and automation (efficientip-tools/audit_feed.py), delivered through NMS-Alert-Bot to efficientip-alerts.
+  description: One-shot cards for SOLIDserver changes made by users, API accounts and automation (efficientip-tools/audit_feed.py), delivered through the Packet Panther bot to dns-change-log.
   disabled: false
 
   triggers:
@@ -17,7 +17,7 @@ workflow:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
         with:
-          channel: C0BG31RLY1H
+          channel: C0B9B99UD6W
           attachments:
             - fallback: "{{ alert.user }} - {{ alert.event }} • Changed"
               color: "#2f81f7"

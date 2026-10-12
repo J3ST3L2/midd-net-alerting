@@ -6,7 +6,7 @@ Python 3 standard library only.
 
 ```text
 SOLIDserver /rest/syslog_full_list --> audit_feed.py (every minute) --+--> OpenObserve  stream eip_audit (every event)
-                                                                      +--> Keep --> #efficientip-alerts (changes worth a card)
+                                                                      +--> Keep --> #dns-change-log (changes worth a card)
 SOLIDserver /rest/vlmvlanv2_list    --> vlan_inventory.py (hourly)  ----> Confluence page "VLAN Inventory - EIP Dynamic"
 SOLIDserver /rest/ip_address_list   -->
 ```
