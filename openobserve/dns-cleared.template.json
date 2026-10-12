@@ -1,0 +1,17 @@
+[
+  {
+    "name": "EfficientIP: <ALERT_NAME>",
+    "status": "resolved",
+    "severity": "info",
+    "source": [
+      "efficientip"
+    ],
+    "fingerprint": "efficientip:openobserve:<ALERT_NAME>",
+    "hostname": "SOLIDserver DNS",
+    "ip": "n/a",
+    "event": "<ALERT_NAME>",
+    "object": "named",
+    "message": "No further matches in the last {alert_period} minute(s)",
+    "alert_url": "{alert_url}"
+  }
+]

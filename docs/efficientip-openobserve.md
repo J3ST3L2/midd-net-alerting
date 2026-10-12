@@ -98,3 +98,28 @@ which fires per scope. The card shows the most recent matching line.
   appliance by REST, SNMP trap or email. The REST login is currently refused (see
   `efficientip-poller/discovery/`); parked until someone confirms how `slack_api` authenticates.
 - The green (cleared) card path is configured but its end-to-end behaviour is still being confirmed.
+
+## DNS health alerts (hera and lion run `named`)
+
+Same chain and the same `<name>` + `<name>_cleared` pairing as the DHCP alerts, defined in
+`openobserve/dns-alert-catalog.json`. They go to `#efficientip-alerts`. They are about the health of DNS,
+not about who changed what (that is the change log: `efficientip-tools/`).
+
+| Alert | Colour | Fires when |
+|---|---|---|
+| `DNS_Zone_Transfers_Stalled` | red | `lion` completes fewer than 20 `middlebury.edu` transfers, or `hera` serves fewer than 100, in 15 minutes (normal: lion about 330, hera about 1,300) |
+| `DNS_Zone_Transfer_Failed` | amber | any transfer line on either server that is not a success |
+| `DNS_Zone_Transfer_Denied` | amber | a host that is not an allowed secondary asks for a zone copy |
+| `DNS_Notify_Failed_Unknown_Target` | amber | an internal-view NOTIFY fails to a target other than the three known stale ones |
+
+Templates: `openobserve/dns-firing.template.json` (shared by all four) and
+`openobserve/dns-cleared.template.json` (one copy per alert, `<ALERT_NAME>` replaced). Every query returns
+the columns `host`, `zone`, `peer`, `detail`, which the templates read. Red versus amber is decided in
+`keep/workflows/efficientip-slack.yaml`.
+
+Measured on 2026-10-11 (24 h): no transfer failures and no denied transfers; about 290,000 notify failures
+a day to three standing internal targets (`140.233.36.197`, `140.233.36.98`, `140.233.9.4`), which the notify
+alert excludes (delete those lines once the stale secondaries are fixed in SOLIDserver); external-view
+notifies to third-party secondaries (Cloudflare, the new `rikert*` zones' hosts) time out routinely and are
+not alerted. "Update forwarding denied" from dynamic-DNS clients is frequent routine noise and is not alerted.
+The failure wording is BIND's standard text and has not yet been seen in this stream.
