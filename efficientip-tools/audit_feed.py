@@ -76,7 +76,7 @@ def derive_object_type(service):
     return normalize_key(service) or "system_event"
 
 
-OBJECT_KEYS = ("rr_full_name", "dnszone_name", "dns_name", "dhcpscope_name", "dhcpsn_name",
+OBJECT_KEYS = ("rr_full_name", "rr_full_name_utf", "rr_name", "dnszone_name", "dns_name", "dhcpscope_name", "dhcpsn_name",
                "dhcphost_name", "member_name", "usr_login", "user_login", "acl_name", "name",
                "hostname", "hostaddr", "ipv4_address")
 
@@ -118,7 +118,8 @@ def is_noise(event, ignore_users=()):
     if event["user"].lower() in {u.lower() for u in ignore_users}:
         return True
     p = event["params"]
-    name = (p.get("rr_full_name") or "").lower()
+    # delete events carry rr_full_name; add events carry rr_full_name_utf (or a relative rr_name)
+    name = (p.get("rr_full_name") or p.get("rr_full_name_utf") or p.get("rr_name") or "").lower()
     zone = (p.get("dnszone_name") or "").lower()
     if name.startswith("_acme-challenge."):
         return True

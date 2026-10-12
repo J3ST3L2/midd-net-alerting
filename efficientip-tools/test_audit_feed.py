@@ -17,6 +17,9 @@ def row(syslog_id, user="alice@example.org", service="Add: DNS RRs", params="", 
 
 ACME = ("dns_name=ns.example.org&dnszone_name=example.com&rr_type=TXT&rr_ttl=300&value1=abc"
         "&dnsview_name=External&rr_full_name=_acme-challenge.example.com")
+# Add events name the record in rr_full_name_utf, not rr_full_name (seen on the real log, 2026-10-12)
+ACME_ADD = ("rr_ttl=300&value1=abc&value2=&rr_type=TXT&dns_name=ns.example.org&class_name="
+            "&dnsview_name=External&dnszone_name=example.com&rr_full_name_utf=_acme-challenge.www.example.com")
 REAL = ("dns_name=ns.example.org&dnszone_name=example.com&rr_type=A&rr_ttl=3600&value1=192.0.2.10"
         "&dnsview_name=External&rr_full_name=www.example.com")
 
@@ -46,6 +49,14 @@ class NoiseTest(unittest.TestCase):
         self.assertTrue(a.is_noise(a.normalize_event(row(1, params=ACME))))
         self.assertTrue(a.is_noise(a.normalize_event(row(2, params="rr_full_name=4.3.2.1.in-addr.arpa&dnszone_name=2.1.in-addr.arpa"))))
         self.assertFalse(a.is_noise(a.normalize_event(row(3, params=REAL))))
+
+    def test_acme_add_events_are_noise_and_show_the_record_name(self):
+        ev = a.normalize_event(row(5, params=ACME_ADD))
+        self.assertTrue(a.is_noise(ev))
+        self.assertEqual(ev["object_name"], "_acme-challenge.www.example.com")
+        real_add = a.normalize_event(row(6, params=ACME_ADD.replace("_acme-challenge.www", "www")))
+        self.assertFalse(a.is_noise(real_add))
+        self.assertEqual(real_add["object_name"], "www.example.com")
 
     def test_ignored_users(self):
         ev = a.normalize_event(row(4, user="Svc-Backup", params=REAL))
