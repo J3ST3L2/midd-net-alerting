@@ -11,6 +11,8 @@ import base64
 import json
 import os
 import ssl
+import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -55,7 +57,7 @@ def get_rows(endpoint, where="", orderby="", max_rows=5000, cfg=None, timeout=60
     endpoint = "/" + endpoint.lstrip("/")
     if not endpoint.startswith("/rest/"):
         endpoint = "/rest" + endpoint
-    rows, offset = [], 0
+    rows, offset, started, pages = [], 0, time.time(), 0
     while len(rows) < max_rows:
         params = {"limit": min(PAGE, max_rows - len(rows)), "offset": offset}
         if where:
@@ -77,7 +79,12 @@ def get_rows(endpoint, where="", orderby="", max_rows=5000, cfg=None, timeout=60
             raise EipError("unexpected response from " + endpoint)
         good = [r for r in page if isinstance(r, dict) and str(r.get("errno", "0")) == "0"]
         rows.extend(good)
+        pages += 1
+        if pages % 10 == 0:  # progress on stderr, so a slow run is visibly alive (journal or terminal)
+            sys.stderr.write("eip_api: %s %d rows in %d pages, %.0fs\n"
+                             % (endpoint, len(rows), pages, time.time() - started))
         if len(page) < params["limit"]:
             break
         offset += params["limit"]
+    sys.stderr.write("eip_api: %s done: %d rows, %.0fs\n" % (endpoint, len(rows), time.time() - started))
     return rows[:max_rows]

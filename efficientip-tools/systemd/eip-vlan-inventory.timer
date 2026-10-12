@@ -1,8 +1,8 @@
 [Unit]
-Description=Publish the SOLIDserver VLAN inventory every hour
+Description=Publish the SOLIDserver VLAN inventory every 6 hours
 
 [Timer]
-OnCalendar=hourly
+OnCalendar=*-*-* 00,06,12,18:15:00
 RandomizedDelaySec=120
 Persistent=yes
 
