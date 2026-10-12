@@ -112,6 +112,13 @@ not about who changed what (that is the change log: `efficientip-tools/`).
 | `DNS_Zone_Transfer_Denied` | amber | a host that is not an allowed secondary asks for a zone copy |
 | `DNS_Notify_Failed_Unknown_Target` | amber | an internal-view NOTIFY fails to a target other than the three known stale ones |
 
+Deployed 2026-10-12 through the OpenObserve API: 5 templates and 5 destinations (`keep-dns-firing`, and
+`keep-dns-cleared-<alert>` for each alert) and 8 alerts, all enabled, 1-minute frequency, 10-minute silence.
+Each `_cleared` alert runs the `cleared_sql` from the catalog (a count query that returns a row only when the
+firing condition is clear; the stalled alert clears when both servers are back above their thresholds).
+Tested end to end with a synthetic `zone transfer ... denied` line claiming to come from hera: an amber card
+appeared in `#efficientip-alerts` about a second after the alert fired.
+
 Templates: `openobserve/dns-firing.template.json` (shared by all four) and
 `openobserve/dns-cleared.template.json` (one copy per alert, `<ALERT_NAME>` replaced). Every query returns
 the columns `host`, `zone`, `peer`, `detail`, which the templates read. Red versus amber is decided in

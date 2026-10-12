@@ -1,5 +1,5 @@
 {
- "_comment": "DNS health alerts for the SOLIDserver DNS servers (hera and lion run named). Same firing + '<name>_cleared' pairing as the DHCP alerts (docs/efficientip-openobserve.md). Firing template: dns-firing.template.json (shared); cleared template: dns-cleared.template.json, one copy per alert with <ALERT_NAME> replaced. Every query returns the columns host, zone, peer, detail that the templates read. Measured against the real stream on 2026-10-11 (24 h).",
+ "_comment": "DNS health alerts for the SOLIDserver DNS servers (hera and lion run named). Same firing + '<name>_cleared' pairing as the DHCP alerts (the cleared alert runs 'cleared_sql': a count query that returns a row only when the firing condition is clear) (docs/efficientip-openobserve.md). Firing template: dns-firing.template.json (shared); cleared template: dns-cleared.template.json, one copy per alert with <ALERT_NAME> replaced. Every query returns the columns host, zone, peer, detail that the templates read. Measured against the real stream on 2026-10-11 (24 h).",
  "alerts": [
   {
    "alert_name": "DNS_Zone_Transfer_Failed",
@@ -9,7 +9,9 @@
    "threshold": ">= 1",
    "sql": "SELECT host, regexp_replace(message, '.*transfer of ''([^'']+)''.*', '$1') AS zone, regexp_replace(message, '.* from ([0-9.]+)#.*', '$1') AS peer, message AS detail FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND ((message LIKE '%transfer of%' AND (message LIKE '%failed%' OR message LIKE '%REFUSED%' OR message LIKE '%NOTAUTH%' OR message LIKE '%timed out%')) OR (message LIKE '%Transfer status:%' AND message NOT LIKE '%success%')) ORDER BY _timestamp DESC LIMIT 1",
    "measured": "0 matches in 24 h; 60,315 successful 'Transfer status: success' lines on lion in the same period, so any match is real.",
-   "note": "The failure wording is BIND's standard text and has not been seen in this stream yet; confirm against the first real failure."
+   "note": "The failure wording is BIND's standard text and has not been seen in this stream yet; confirm against the first real failure.",
+   "cleared_sql": "SELECT 'clear' AS status, c FROM (SELECT count(*) AS c FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND ((message LIKE '%transfer of%' AND (message LIKE '%failed%' OR message LIKE '%REFUSED%' OR message LIKE '%NOTAUTH%' OR message LIKE '%timed out%')) OR (message LIKE '%Transfer status:%' AND message NOT LIKE '%success%'))) AS t WHERE c = 0",
+   "deployed": "2026-10-12 (created through the OpenObserve API; templates and destinations named keep-dns-*)"
   },
   {
    "alert_name": "DNS_Zone_Transfers_Stalled",
@@ -20,7 +22,9 @@
    "color": "red",
    "sql": "SELECT host, 'middlebury.edu' AS zone, 'n/a' AS peer, concat('only ', cast(c AS varchar), ' completed transfers in 15 minutes (normal: hundreds)') AS detail FROM (SELECT 'lion.middlebury.edu' AS host, count(*) AS c FROM \"network_syslog\" WHERE host='lion.middlebury.edu' AND appname='named' AND message LIKE '%Transfer completed%' AND message LIKE '%middlebury.edu/IN%') WHERE c < 20 UNION ALL SELECT host, 'middlebury.edu' AS zone, 'n/a' AS peer, concat('only ', cast(c AS varchar), ' served transfers in 15 minutes (normal: hundreds)') AS detail FROM (SELECT 'hera.middlebury.edu' AS host, count(*) AS c FROM \"network_syslog\" WHERE host='hera.middlebury.edu' AND appname='named' AND message LIKE '%IXFR ended%' AND message LIKE '%middlebury.edu/IN%') WHERE c < 100",
    "measured": "Per 15 minutes on the middlebury.edu zone over 24 h: lion 'Transfer completed' min 104, median 330; hera 'IXFR ended' min 400, median 1310. Thresholds 20 and 100 are far below normal.",
-   "note": "The count is zero-row safe: it is computed first and then filtered, so a host with no lines at all still returns a row."
+   "note": "The count is zero-row safe: it is computed first and then filtered, so a host with no lines at all still returns a row.",
+   "cleared_sql": "SELECT 'clear' AS status, 1 AS c FROM (SELECT count(*) AS n FROM \"network_syslog\" WHERE host='lion.middlebury.edu' AND appname='named' AND message LIKE '%Transfer completed%' AND message LIKE '%middlebury.edu/IN%') AS l CROSS JOIN (SELECT count(*) AS n FROM \"network_syslog\" WHERE host='hera.middlebury.edu' AND appname='named' AND message LIKE '%IXFR ended%' AND message LIKE '%middlebury.edu/IN%') AS h WHERE l.n >= 20 AND h.n >= 100",
+   "deployed": "2026-10-12 (created through the OpenObserve API; templates and destinations named keep-dns-*)"
   },
   {
    "alert_name": "DNS_Notify_Failed_Unknown_Target",
@@ -29,7 +33,9 @@
    "frequency_minutes": 1,
    "threshold": ">= 1",
    "sql": "SELECT host, regexp_replace(message, '.*zone ([^:]+): notify.*', '$1') AS zone, regexp_replace(message, '.*notify to ([0-9.]+)#.*', '$1') AS peer, message AS detail FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND message LIKE '%/IN/Internal:%' AND message LIKE '%notify to%failed%' AND message NOT LIKE '%notify to 140.233.36.197#%' AND message NOT LIKE '%notify to 140.233.36.98#%' AND message NOT LIKE '%notify to 140.233.9.4#%' ORDER BY _timestamp DESC LIMIT 1",
-   "measured": "Internal view only. About 290,000 notify failures a day go to three standing targets (140.233.36.197, 140.233.36.98, 140.233.9.4), excluded here; delete those lines once the stale secondaries are fixed in SOLIDserver. External-view notifies to third-party secondaries (Cloudflare 162.159.x and the new rikert* zones' hosts) time out routinely and are not alerted."
+   "measured": "Internal view only. About 290,000 notify failures a day go to three standing targets (140.233.36.197, 140.233.36.98, 140.233.9.4), excluded here; delete those lines once the stale secondaries are fixed in SOLIDserver. External-view notifies to third-party secondaries (Cloudflare 162.159.x and the new rikert* zones' hosts) time out routinely and are not alerted.",
+   "cleared_sql": "SELECT 'clear' AS status, c FROM (SELECT count(*) AS c FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND message LIKE '%/IN/Internal:%' AND message LIKE '%notify to%failed%' AND message NOT LIKE '%notify to 140.233.36.197#%' AND message NOT LIKE '%notify to 140.233.36.98#%' AND message NOT LIKE '%notify to 140.233.9.4#%') AS t WHERE c = 0",
+   "deployed": "2026-10-12 (created through the OpenObserve API; templates and destinations named keep-dns-*)"
   },
   {
    "alert_name": "DNS_Zone_Transfer_Denied",
@@ -38,7 +44,9 @@
    "frequency_minutes": 1,
    "threshold": ">= 1",
    "sql": "SELECT host, regexp_replace(message, '.*zone transfer ''([^'']+)''.*', '$1') AS zone, regexp_replace(message, '.*client @0x[0-9a-f]+ ([0-9.]+)#.*', '$1') AS peer, message AS detail FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND message LIKE '%zone transfer%' AND message LIKE '%denied%' ORDER BY _timestamp DESC LIMIT 1",
-   "measured": "0 matches in 24 h. A match means a host that is not an allowed secondary asked for a zone copy."
+   "measured": "0 matches in 24 h. A match means a host that is not an allowed secondary asked for a zone copy.",
+   "cleared_sql": "SELECT 'clear' AS status, c FROM (SELECT count(*) AS c FROM \"network_syslog\" WHERE appname='named' AND host IN ('hera.middlebury.edu','lion.middlebury.edu') AND message LIKE '%zone transfer%' AND message LIKE '%denied%') AS t WHERE c = 0",
+   "deployed": "2026-10-12 (created through the OpenObserve API; templates and destinations named keep-dns-*)"
   }
  ]
 }
