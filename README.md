@@ -41,3 +41,5 @@ docs/
 The Mist telemetry dashboard (Grafana) is described in `deploy/mist-dashboard/README.md`.
 
 Production details are documented in `docs/librenms-keep-slack.md`.
+
+Keep is watched from outside by MiddWatchtower (Azure). Gravitron pushes a heartbeat every minute, so a dead Keep or Gravitron cannot stay silent: see `deploy/watchtower-heartbeat/README.md`.

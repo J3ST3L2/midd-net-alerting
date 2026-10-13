@@ -1,0 +1,14 @@
+[Unit]
+Description=Push Gravitron/Keep heartbeat to MiddWatchtower
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/watchtower-heartbeat.env
+ExecStart=/usr/local/bin/watchtower-heartbeat
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
