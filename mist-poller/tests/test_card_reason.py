@@ -1,6 +1,6 @@
 import unittest
 
-from mist_poller.normalize import AMBER, RED, card_color, card_reason, with_card_labels
+from mist_poller.normalize import AMBER, RED, DEFAULT_REASONS, card_color, card_reason, to_eastern, with_card_labels
 
 
 class CardReasonTest(unittest.TestCase):
@@ -30,6 +30,38 @@ class CardReasonTest(unittest.TestCase):
         self.assertNotIn("mist_reason_card", src["labels"])
         self.assertEqual(out["labels"]["mist_reason"], "LINK_DOWN: a")
         self.assertEqual(out["name"], "x")
+
+    def test_capacity_and_coverage_alarms_have_plain_english_reasons(self):
+        self.assertIn("capacity", DEFAULT_REASONS["insufficient_capacity"])
+        self.assertIn("coverage", DEFAULT_REASONS["insufficient_coverage"])
+
+    def test_eastern_time_follows_us_daylight_rules(self):
+        self.assertEqual(to_eastern("2026-10-13T02:00:00Z"), "2026-10-12 22:00 EDT")
+        self.assertEqual(to_eastern("2026-10-13T02:00:00.000Z"), "2026-10-12 22:00 EDT")
+        self.assertEqual(to_eastern("2026-01-15T17:00:00Z"), "2026-01-15 12:00 EST")
+        # 2026: DST starts Sunday March 8 at 07:00 UTC and ends Sunday Nov 1 at 06:00 UTC
+        self.assertEqual(to_eastern("2026-03-08T06:59:59Z"), "2026-03-08 01:59 EST")
+        self.assertEqual(to_eastern("2026-03-08T07:00:00Z"), "2026-03-08 03:00 EDT")
+        self.assertEqual(to_eastern("2026-11-01T05:59:59Z"), "2026-11-01 01:59 EDT")
+        self.assertEqual(to_eastern("2026-11-01T06:00:00Z"), "2026-11-01 01:00 EST")
+
+    def test_unparseable_times_pass_through(self):
+        self.assertEqual(to_eastern("n/a"), "n/a")
+        self.assertEqual(to_eastern(""), "")
+
+    def test_cards_get_local_times_and_original_payload_is_untouched(self):
+        src = {"lastReceived": "2026-10-13T02:00:00Z",
+               "labels": {"mist_last_seen": "2026-10-13T04:55:41Z", "mist_reason": ""}}
+        out = with_card_labels(src)
+        self.assertEqual(out["labels"]["mist_event_time_local"], "2026-10-12 22:00 EDT")
+        self.assertEqual(out["labels"]["mist_last_seen"], "2026-10-13 00:55 EDT")
+        self.assertEqual(out["lastReceived"], "2026-10-13T02:00:00Z")
+        self.assertEqual(src["labels"]["mist_last_seen"], "2026-10-13T04:55:41Z")
+
+    def test_missing_last_seen_stays_na_and_event_time_always_present(self):
+        out = with_card_labels({"lastReceived": "2026-10-13T02:00:00Z", "labels": {"mist_last_seen": "n/a"}})
+        self.assertEqual(out["labels"]["mist_last_seen"], "n/a")
+        self.assertIn("mist_event_time_local", with_card_labels({"labels": {}})["labels"])
 
     def test_red_only_for_down_events(self):
         for typ in ("device_down", "switch_down", "gateway_down", "mist_edge_disconnected"):
