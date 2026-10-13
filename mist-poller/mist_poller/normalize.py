@@ -125,6 +125,8 @@ DEFAULT_REASONS = {
     "bad_cable": "Cable fault detected on the port",
     "rogue_ap": "Unauthorised access point detected nearby",
     "loop_detected_by_ap": "Layer 2 loop detected by an access point",
+    "insufficient_capacity": "Not enough Wi-Fi capacity on this access point for the clients it serves",
+    "insufficient_coverage": "Not enough Wi-Fi signal coverage for the clients near this access point",
 }
 
 
@@ -172,11 +174,41 @@ def card_color(event_type):
     return RED if event_type in DOWN_TYPES else AMBER
 
 
+def _nth_sunday(year, month, n):
+    import datetime
+    d = datetime.date(year, month, 1)
+    first = d + datetime.timedelta(days=(6 - d.weekday()) % 7)
+    return first + datetime.timedelta(weeks=n - 1)
+
+
+def to_eastern(iso_utc):
+    """'2026-10-13T02:00:00Z' (UTC, optional fraction) -> '2026-10-12 22:00 EDT'.
+
+    US rules: daylight time runs from the second Sunday in March (07:00 UTC) to the first
+    Sunday in November (06:00 UTC). Written out so the slim container needs no tz database.
+    Anything that does not parse is returned unchanged.
+    """
+    import datetime
+    try:
+        dt = datetime.datetime.strptime(str(iso_utc).split(".")[0].rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return iso_utc
+    start = datetime.datetime.combine(_nth_sunday(dt.year, 3, 2), datetime.time(7))
+    end = datetime.datetime.combine(_nth_sunday(dt.year, 11, 1), datetime.time(6))
+    dst = start <= dt < end
+    local = dt + datetime.timedelta(hours=-4 if dst else -5)
+    return local.strftime("%Y-%m-%d %H:%M ") + ("EDT" if dst else "EST")
+
+
 def with_card_labels(payload):
     """Return a copy of the Keep payload with the labels the Slack cards render."""
     labels = dict(payload.get("labels") or {})
     labels["mist_reason_card"] = card_reason(labels.get("mist_reason", "")) or "n/a"
     labels["mist_card_color"] = card_color(labels.get("mist_event_type", ""))
+    # Cards show Eastern time. lastReceived itself stays UTC (Keep parses it as a timestamp).
+    labels["mist_event_time_local"] = to_eastern(payload.get("lastReceived", "")) or "n/a"
+    if labels.get("mist_last_seen") and labels["mist_last_seen"] != "n/a":
+        labels["mist_last_seen"] = to_eastern(labels["mist_last_seen"])
     return dict(payload, labels=labels)
 
 
