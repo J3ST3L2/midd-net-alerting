@@ -108,5 +108,30 @@ class EfficientIPAuditTests(unittest.TestCase):
         self.assertEqual(which(f, {"status": "resolved"}), [])
 
 
+class FacilitiesTests(unittest.TestCase):
+    F = "facilities-slack.yaml"
+
+    def test_firing_one_card_by_color_and_one_email(self):
+        for rule, color in (("Facilities Meter Down", "red"), ("Facilities Power Voltage", "amber")):
+            got = which(self.F, {"status": "firing", "rule": rule})
+            cards = [g for g in got if g.startswith("slack-firing")]
+            self.assertEqual(len(cards), 1, "%s -> %s" % (rule, got))
+            self.assertTrue(cards[0].endswith(color), "%s -> %s" % (rule, got))
+            self.assertEqual([g for g in got if g.startswith("email")], ["email-firing-facilities"])
+
+    def test_repeat_firing_does_nothing_more(self):
+        got = which(self.F, {"status": "firing", "rule": "Facilities Power Voltage",
+                             "slack_timestamp_facilities_v1": "1.1", "emailed_facilities_v1": "1"})
+        self.assertEqual(got, [])
+
+    def test_resolved_updates_card_and_emails_once(self):
+        got = which(self.F, {"status": "resolved", "rule": "Facilities Power Voltage",
+                             "slack_timestamp_facilities_v1": "1.1", "emailed_facilities_v1": "1"})
+        self.assertEqual(got, ["email-resolved-facilities", "slack-resolved-update-facilities"])
+
+    def test_resolved_without_prior_notification_is_silent(self):
+        self.assertEqual(which(self.F, {"status": "resolved", "rule": "Facilities Power Voltage"}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

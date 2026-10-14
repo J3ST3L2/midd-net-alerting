@@ -1,0 +1,167 @@
+workflow:
+  id: middlebury-facilities-alerts
+  name: Middlebury Facilities Alerts
+  description: Stateful Facilities (eGauge power and building controls) lifecycle delivery to #network-sensor-monitors through NMS-Alert-Bot, plus email to the Facilities energy mailbox.
+  disabled: false
+
+  # Facilities alerts come from LibreNMS with source "facilities" (template keep-facilities-json.blade),
+  # so the network workflow (source librenms) never sees them and this one never sees network alerts.
+  triggers:
+    - type: alert
+      filters:
+        - key: source
+          value: facilities
+
+  actions:
+    # ---- Slack: #network-sensor-monitors (C0994U052GK) --------------------------------------
+    - name: slack-resolved-update-facilities
+      if: "'{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          slack_timestamp: "{{ alert.slack_timestamp_facilities_v1 }}"
+          channel: C0994U052GK
+          enrich_alert:
+            - key: slack_timestamp_facilities_v1
+              value: ""
+          attachments:
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Resolved"
+              color: "#39ff14"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
+              fields:
+                - title: Status
+                  value: "Resolved"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.fired_reason }}"
+                  short: false
+                - title: Location
+                  value: "{{ alert.fired_location }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+                - title: Recovered
+                  value: "{{ alert.resolved }}"
+                  short: true
+                - title: Duration
+                  value: "{{ alert.duration }}"
+                  short: true
+              footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-facilities-red
+      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0994U052GK
+          enrich_alert:
+            - key: slack_timestamp_facilities_v1
+              value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
+            - key: fired_location
+              value: "{{ alert.location }}"
+          attachments:
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
+              color: "#ff3131"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
+                - title: Location
+                  value: "{{ alert.location }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+              footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
+
+    - name: slack-firing-facilities-amber
+      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and not (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      provider:
+        type: slack
+        config: "{{ providers.middlebury-nms-alert-bot }}"
+        with:
+          channel: C0994U052GK
+          enrich_alert:
+            - key: slack_timestamp_facilities_v1
+              value: results.slack_timestamp
+            - key: fired_reason
+              value: "{{ alert.reason }}"
+            - key: fired_location
+              value: "{{ alert.location }}"
+          attachments:
+            - fallback: "{{ alert.device }} - {{ alert.rule }} • Ongoing"
+              color: "#ffb000"
+              author_name: "{{ alert.device }} - {{ alert.rule }}"
+              author_link: "{{ alert.url }}"
+              author_icon: "{{ alert.vendor_icon }}"
+              fields:
+                - title: Status
+                  value: "Ongoing"
+                  short: true
+                - title: IP
+                  value: "{{ alert.ip }}"
+                  short: true
+                - title: Reason
+                  value: "{{ alert.reason }}"
+                  short: false
+                - title: Location
+                  value: "{{ alert.location }}"
+                  short: true
+                - title: Started
+                  value: "{{ alert.fired }}"
+                  short: true
+              footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
+
+    # ---- Email: Facilities energy mailbox via the M365 port-25 relay --------------------------
+    # TEST PHASE: to_email is the tester. At go-live change both actions to fsenergymanage@middlebury.edu.
+    # Needs a Keep SMTP provider named middlebury-smtp-relay (relay.middlebury.edu:25, no auth).
+    # Emails reference only fields the template always sends (never the fired_* enrichment), so a
+    # failed Slack action cannot break the email. Sender is LibreNMS@middlebury.edu (chosen by the owner); confirm the relay accepts it.
+    - name: email-firing-facilities
+      if: "not '{{ alert.emailed_facilities_v1 }}' and '{{ alert.status }}' == 'firing'"
+      provider:
+        type: smtp
+        config: "{{ providers.middlebury-smtp-relay }}"
+        with:
+          from_email: "LibreNMS@middlebury.edu"
+          from_name: "LibreNMS"
+          to_email: "tberno@middlebury.edu"
+          subject: "[Facilities ALERT] {{ alert.device }} - {{ alert.rule }}"
+          html: "<p><b>{{ alert.device }}</b> - {{ alert.rule }}</p><p><b>Reason:</b> {{ alert.reason }}</p><p><b>Location:</b> {{ alert.location }}<br><b>IP:</b> {{ alert.ip }}<br><b>Started:</b> {{ alert.fired }}</p><p><a href=\"{{ alert.url }}\">Open in LibreNMS</a></p>"
+          enrich_alert:
+            - key: emailed_facilities_v1
+              value: "1"
+
+    - name: email-resolved-facilities
+      if: "'{{ alert.emailed_facilities_v1 }}' and '{{ alert.status }}' == 'resolved'"
+      provider:
+        type: smtp
+        config: "{{ providers.middlebury-smtp-relay }}"
+        with:
+          from_email: "LibreNMS@middlebury.edu"
+          from_name: "LibreNMS"
+          to_email: "tberno@middlebury.edu"
+          subject: "[Facilities RESOLVED] {{ alert.device }} - {{ alert.rule }}"
+          html: "<p><b>{{ alert.device }}</b> - {{ alert.rule }} has recovered.</p><p><b>Started:</b> {{ alert.fired }}<br><b>Recovered:</b> {{ alert.resolved }}<br><b>Duration:</b> {{ alert.duration }}</p><p><a href=\"{{ alert.url }}\">Open in LibreNMS</a></p>"
+          enrich_alert:
+            - key: emailed_facilities_v1
+              value: ""

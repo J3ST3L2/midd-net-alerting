@@ -1,0 +1,91 @@
+{{-- Facilities copy of keep-production-json.blade (midd-net-alerting). Differences: source=facilities,
+     fingerprint prefix, reason also reads service_message, url points at the device page. Keep the two in sync
+     if the shared logic changes. Load with the same DB command as template id 6, into a NEW template row. --}}
+@php
+    $device = \App\Models\Device::find($alert->device_id);
+    $deviceName = $alert->display ?: ($alert->sysName ?: $alert->hostname);
+    $ruleName = $alert->name ?: $alert->rule;
+    $firedAt = \App\Models\AlertLog::find($alert->id)?->time_logged?->format('Y-m-d H:i:s') ?? $alert->timestamp;
+    $vendorIcon = $device?->logo();
+    $keepName = trim($deviceName . ' - ' . $ruleName);
+    // Red only when the thing is down or unreachable; every other firing alert is amber.
+    $cardColor = preg_match('/down|unreach|offline/i', (string) $ruleName) ? '#ff3131' : '#ffb000';
+
+    // Faults live on the alert object, not as a bare $faults. Join a few human lines.
+    $faultLines = [];
+    $rawFaults = $alert->faults ?? ($faults ?? []);     // tolerate either shape across LibreNMS versions
+    if (is_array($rawFaults)) {
+        foreach ($rawFaults as $f) {
+            if (is_array($f)) {
+                foreach (['service_message', 'string', 'msg', 'description'] as $k) {   // service_message = check_egauge output
+                    if (!empty($f[$k])) { $faultLines[] = trim((string) $f[$k]); break; }
+                }
+            } elseif (is_string($f) && $f !== '') {
+                $faultLines[] = trim($f);
+            }
+        }
+    }
+
+    // Some rules (for example "Device rebooted") hand back a dump of device fields instead of a fault:
+    // "sysObjectID = ...; snmpEngineID = ...; sysDescr = ...". That is noise, not a reason.
+    $faultLines = array_values(array_filter($faultLines, function ($line) {
+        return !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', $line);
+    }));
+
+    // Only real fault text counts as a reason. Never echo the rule name (it duplicates the Issue line).
+    // On recovery LibreNMS has no faults, so the workflow shows the reason saved when the alert fired.
+    if ($alert->state == 0) {
+        $reason = '';
+    } else {
+        $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) : '';
+        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName
+            && !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', (string) $msg)) {
+            $reason = trim((string) $msg);
+        }
+        if ($reason === '' && preg_match('/reboot/i', (string) $ruleName)) {
+            $reason = 'Device restarted (its uptime counter was reset)';
+        }
+        if ($reason === '' && preg_match('/down|unreach|offline/i', (string) $ruleName)) {
+            // LibreNMS records why it considers a device down: 'icmp' (no ping) or 'snmp' (pings, no SNMP).
+            $why = strtolower((string) ($device?->status_reason ?? ''));
+            if ($why === 'icmp') { $reason = 'No response to ping (ICMP)'; }
+            elseif ($why === 'snmp') { $reason = 'Answers ping but not SNMP'; }
+        }
+        if ($reason === '') { $reason = 'n/a'; }
+    }
+    $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
+
+    // Device context (what the thing is), always safe to send.
+    $hardware = $device?->hardware ?: '';
+    $osVersion = trim(($device?->os ?: '') . ' ' . ($device?->version ?: ''));
+@endphp
+[
+{
+  "id": "facilities-{{ $alert->device_id }}-{{ $alert->rule_id }}",
+  "name": {!! json_encode($keepName) !!},
+  "severity": "{{ $alert->state == 0 ? 'info' : strtolower((string) $alert->severity) }}",
+  "status": "{{ $alert->state == 0 ? 'resolved' : 'firing' }}",
+  "source": ["facilities"],
+  "fingerprint": "facilities:device:{{ $alert->device_id }}:rule:{{ $alert->rule_id }}",
+  "device": {!! json_encode($deviceName) !!},
+  "hostname": {!! json_encode($alert->hostname) !!},
+  "device_id": {{ (int) $alert->device_id }},
+  "rule_id": {{ (int) $alert->rule_id }},
+  "alert_log_id": {{ (int) $alert->id }},
+  "librenms_uid": {!! json_encode((string) $alert->uid) !!},
+  "ip": {!! json_encode($alert->ip) !!},
+  "location": {!! json_encode($alert->location) !!},
+  "rule": {!! json_encode($ruleName) !!},
+  "summary": {!! json_encode($ruleName) !!},
+  "reason": {!! json_encode($reason) !!},
+  "card_color": {!! json_encode($cardColor) !!},
+  "hardware": {!! json_encode($hardware) !!},
+  "software": {!! json_encode($osVersion) !!},
+  "vendor_icon": {!! json_encode($vendorIcon) !!},
+  "fired": {!! json_encode($firedAt) !!},
+  "resolved": {!! $alert->state == 0 ? json_encode($alert->timestamp) : 'null' !!},
+  "duration": {!! $alert->state == 0 ? json_encode($alert->elapsed) : 'null' !!},
+  "timestamp": {!! json_encode($alert->timestamp) !!},
+  "url": "https://raccoon.middlebury.edu/device/{{ (int) $alert->device_id }}"
+}
+]
