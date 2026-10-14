@@ -46,11 +46,11 @@ the relay accepts its address and the sender `LibreNMS@middlebury.edu`. Same own
 4. **After any Keep restart, confirm a real card posts in the existing network channels**, then post a labeled
    test event into this lane and confirm the Slack card and the email (see the runbook in `midd-fac-backnet`).
 
-## Test phase and go-live
+## Recipients
 
-`to_email` in both email actions is the tester's own address while the lane is being proved. At go-live change both
-actions to the Facilities energy mailbox, in one small follow-up change. Recipient and channel are the only
-Facilities-specific settings in the workflow.
+Slack: #network-sensor-monitors. Email: the Facilities energy mailbox (`to_email` in both email actions, set
+at go-live on 2026-10-14 after the Keep-side test events and a real LibreNMS alert both passed). These two values are the
+only Facilities-specific settings in the workflow.
 
 ## Tests
 
