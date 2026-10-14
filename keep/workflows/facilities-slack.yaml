@@ -132,7 +132,6 @@ workflow:
               footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
 
     # ---- Email: Facilities energy mailbox via the M365 port-25 relay --------------------------
-    # TEST PHASE: to_email is the tester. At go-live change both actions to fsenergymanage@middlebury.edu.
     # Needs a Keep SMTP provider named middlebury-smtp-relay (relay.middlebury.edu:25, no auth).
     # Emails reference only fields the template always sends (never the fired_* enrichment), so a
     # failed Slack action cannot break the email. Sender is LibreNMS@middlebury.edu (chosen by the owner); confirm the relay accepts it.
@@ -144,7 +143,7 @@ workflow:
         with:
           from_email: "LibreNMS@middlebury.edu"
           from_name: "LibreNMS"
-          to_email: "tberno@middlebury.edu"
+          to_email: "fsenergymanage@middlebury.edu"
           subject: "[Facilities ALERT] {{ alert.device }} - {{ alert.rule }}"
           html: "<p><b>{{ alert.device }}</b> - {{ alert.rule }}</p><p><b>Reason:</b> {{ alert.reason }}</p><p><b>Location:</b> {{ alert.location }}<br><b>IP:</b> {{ alert.ip }}<br><b>Started:</b> {{ alert.fired }}</p><p><a href=\"{{ alert.url }}\">Open in LibreNMS</a></p>"
           enrich_alert:
@@ -159,7 +158,7 @@ workflow:
         with:
           from_email: "LibreNMS@middlebury.edu"
           from_name: "LibreNMS"
-          to_email: "tberno@middlebury.edu"
+          to_email: "fsenergymanage@middlebury.edu"
           subject: "[Facilities RESOLVED] {{ alert.device }} - {{ alert.rule }}"
           html: "<p><b>{{ alert.device }}</b> - {{ alert.rule }} has recovered.</p><p><b>Started:</b> {{ alert.fired }}<br><b>Recovered:</b> {{ alert.resolved }}<br><b>Duration:</b> {{ alert.duration }}</p><p><a href=\"{{ alert.url }}\">Open in LibreNMS</a></p>"
           enrich_alert:
