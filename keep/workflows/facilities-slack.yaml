@@ -13,6 +13,12 @@ workflow:
           value: facilities
 
   actions:
+    # ACTIONABLE GATE: the Facilities LibreNMS template (keep-facilities-json.blade) sets severity "info" on a
+    # FIRING voltage alert that nobody can act on (the check returned nothing or could not read the meter, which
+    # means a monitoring problem rather than a power problem). The firing actions below skip those. Recovery
+    # actions are unaffected: a recovery already has severity info, and they only run for alerts that were posted.
+    # The test is a lower-cased substring match so it works whether Keep renders severity as "info" or as an
+    # enum name such as "AlertSeverity.INFO". It reads only the severity field, which every alert already carries.
     # ---- Slack: #network-sensor-monitors (C0994U052GK) --------------------------------------
     - name: slack-resolved-update-facilities
       if: "'{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'resolved'"
@@ -56,7 +62,7 @@ workflow:
               footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-facilities-red
-      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower())) and 'info' not in '{{ alert.severity }}'.lower()"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -94,7 +100,7 @@ workflow:
               footer: "Facilities • Open in LibreNMS: {{ alert.url }}"
 
     - name: slack-firing-facilities-amber
-      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and not (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower()))"
+      if: "not '{{ alert.slack_timestamp_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and not (('down' in '{{ alert.rule }}'.lower() or 'unreach' in '{{ alert.rule }}'.lower() or 'offline' in '{{ alert.rule }}'.lower())) and 'info' not in '{{ alert.severity }}'.lower()"
       provider:
         type: slack
         config: "{{ providers.middlebury-nms-alert-bot }}"
@@ -136,7 +142,7 @@ workflow:
     # Emails reference only fields the template always sends (never the fired_* enrichment), so a
     # failed Slack action cannot break the email. Sender is LibreNMS@middlebury.edu (chosen by the owner); confirm the relay accepts it.
     - name: email-firing-facilities
-      if: "not '{{ alert.emailed_facilities_v1 }}' and '{{ alert.status }}' == 'firing'"
+      if: "not '{{ alert.emailed_facilities_v1 }}' and '{{ alert.status }}' == 'firing' and 'info' not in '{{ alert.severity }}'.lower()"
       provider:
         type: smtp
         config: "{{ providers.middlebury-smtp-relay }}"
