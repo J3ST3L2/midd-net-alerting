@@ -1,5 +1,5 @@
 {{-- Facilities copy of keep-production-json.blade (midd-net-alerting). Differences: source=facilities,
-     fingerprint prefix, reason also reads service_message, url points at the device page. Keep the two in sync
+     fingerprint prefix, reason also reads service_message (and never falls back to $msg), url points at the device page. Keep the two in sync
      if the shared logic changes. Load with the same DB command as template id 6, into a NEW template row. --}}
 @php
     $device = \App\Models\Device::find($alert->device_id);
@@ -38,9 +38,10 @@
         $reason = '';
     } else {
         $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) : '';
-        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName
-            && !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', (string) $msg)) {
-            $reason = trim((string) $msg);
+        // Facilities copy: do NOT fall back to $msg. For a services rule with no check output, $msg is a raw dump
+        // of database fields ("location_id = 511; override_sysLocation = 1; service_id = 27; ..."), which is noise.
+        if ($reason === '' && preg_match('/voltage/i', (string) $ruleName)) {
+            $reason = 'The voltage check returned no reading (monitoring problem, not a confirmed power fault)';
         }
         if ($reason === '' && preg_match('/reboot/i', (string) $ruleName)) {
             $reason = 'Device restarted (its uptime counter was reset)';
