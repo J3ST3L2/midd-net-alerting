@@ -1,6 +1,24 @@
-{{-- Facilities copy of keep-production-json.blade (midd-net-alerting). Differences: source=facilities,
-     fingerprint prefix, reason also reads service_message, url points at the device page. Keep the two in sync
-     if the shared logic changes. Load with the same DB command as template id 6, into a NEW template row. --}}
+{{-- =====================================================================================================
+     Keep alert template for FACILITIES power alerts (LibreNMS template row 7, "Keep Facilities JSON").
+     Copy of keep-production-json.blade (the network template) with these differences:
+       1. "source" is "facilities", so Keep routes it to the Facilities workflow and the network
+          workflow never sees it.
+       2. The voltage check's own output (service_message) is the Reason, and the template NEVER falls
+          back to LibreNMS's $msg (for a services rule that is a raw dump of database fields).
+       3. The link goes to the device page, not the alert log.
+       4. ACTIONABLE GATE: an alert nobody can act on is downgraded to severity "info". The Keep workflow
+          does not post or email "info" alerts that are firing. See the section marked ACTIONABLE GATE.
+     WHAT COUNTS AS ACTIONABLE (voltage rule only; the "Meter Down" rule is always actionable):
+       - YES: the check measured a voltage and it is out of range (message like "CRITICAL - L1 90.0V
+         outside 108-132V"). Someone should look at the power.
+       - NO: the check returned nothing, or said "UNKNOWN - could not read ...". That means the
+         monitoring path failed (for example the 8 PM backup stall of raccoon on 2026-10-14), not
+         that power failed. A real outage is caught separately by "Meter Down" (ping).
+     Keep this file identical to the copy in midd-fac-backnet and midd-net-alerting.
+     Load into LibreNMS with the DB command used for template 6 (the web editor does not save it);
+     steps are in docs/facilities-alerting.md. The comments below use PHP "//" so they stay out of the
+     rendered JSON. This header is a Blade comment and is never rendered.
+     ===================================================================================================== --}}
 @php
     $device = \App\Models\Device::find($alert->device_id);
     $deviceName = $alert->display ?: ($alert->sysName ?: $alert->hostname);
@@ -12,13 +30,21 @@
     $cardColor = preg_match('/down|unreach|offline/i', (string) $ruleName) ? '#ff3131' : '#ffb000';
 
     // Faults live on the alert object, not as a bare $faults. Join a few human lines.
+    // $checkMessage keeps ONLY the voltage check's own output (what check_egauge printed), because the
+    // ACTIONABLE GATE below needs to know whether the check really measured something. Empty means the
+    // check printed nothing (it was killed, timed out or never ran).
     $faultLines = [];
+    $checkMessage = '';
     $rawFaults = $alert->faults ?? ($faults ?? []);     // tolerate either shape across LibreNMS versions
     if (is_array($rawFaults)) {
         foreach ($rawFaults as $f) {
             if (is_array($f)) {
                 foreach (['service_message', 'string', 'msg', 'description'] as $k) {   // service_message = check_egauge output
-                    if (!empty($f[$k])) { $faultLines[] = trim((string) $f[$k]); break; }
+                    if (!empty($f[$k])) {
+                        $faultLines[] = trim((string) $f[$k]);
+                        if ($k === 'service_message' && $checkMessage === '') { $checkMessage = trim((string) $f[$k]); }
+                        break;
+                    }
                 }
             } elseif (is_string($f) && $f !== '') {
                 $faultLines[] = trim($f);
@@ -38,10 +64,9 @@
         $reason = '';
     } else {
         $reason = $faultLines ? implode('; ', array_slice($faultLines, 0, 3)) : '';
-        if ($reason === '' && !empty($msg) && trim((string) $msg) !== (string) $ruleName
-            && !preg_match('/\b(sysObjectID|snmpEngineID|sysDescr)\s*=/i', (string) $msg)) {
-            $reason = trim((string) $msg);
-        }
+        // Facilities copy: deliberately NO fallback to $msg. For a services rule with no check output, $msg is a
+        // raw dump of database fields ("location_id = 511; override_sysLocation = 1; service_id = 27; ..."),
+        // which is noise. The voltage rule's own fallback text is set by the ACTIONABLE GATE below.
         if ($reason === '' && preg_match('/reboot/i', (string) $ruleName)) {
             $reason = 'Device restarted (its uptime counter was reset)';
         }
@@ -53,6 +78,33 @@
         }
         if ($reason === '') { $reason = 'n/a'; }
     }
+    // ===== ACTIONABLE GATE ============================================================================
+    // Goal: never page a person for something they cannot act on. The rule itself already requires a
+    // non-empty check message and waits 8 minutes, but this gate is the backstop in code.
+    //
+    // A FIRING voltage alert is actionable only when the check MEASURED a voltage and it was out of
+    // range. It is NOT actionable when the check printed nothing (killed, timed out, never ran) or
+    // began with "UNKNOWN" (it could not read the meter). Both mean the monitoring path failed, not
+    // the power, so nobody has anything to fix at the building. Real outages are caught by the separate
+    // "Meter Down" rule, which uses ping and does not depend on this check.
+    //
+    // A non-actionable alert is not dropped here (LibreNMS still records it). Instead its severity is
+    // set to "info", and the Keep workflow skips posting or emailing FIRING alerts with severity info.
+    // Recovery events already carry severity info and are handled by the workflow's own conditions.
+    // Rules whose name does not contain "voltage" (for example "Facilities Meter Down") are always
+    // treated as actionable.
+    $actionable = true;
+    if ($alert->state != 0 && preg_match('/voltage/i', (string) $ruleName)) {
+        $measured = $checkMessage !== '' && !preg_match('/^\s*UNKNOWN\b/i', $checkMessage);
+        if (!$measured) {
+            $actionable = false;
+            $reason = 'No usable voltage reading (the check returned nothing or could not read the meter). '
+                    . 'Not a confirmed power fault; no action needed.';
+        }
+    }
+    $severityOut = ($alert->state == 0 || !$actionable) ? 'info' : strtolower((string) $alert->severity);
+    // ===== end ACTIONABLE GATE ========================================================================
+
     $reason = mb_substr(preg_replace('/\s+/', ' ', $reason), 0, 300);
 
     // Device context (what the thing is), always safe to send.
@@ -63,7 +115,7 @@
 {
   "id": "facilities-{{ $alert->device_id }}-{{ $alert->rule_id }}",
   "name": {!! json_encode($keepName) !!},
-  "severity": "{{ $alert->state == 0 ? 'info' : strtolower((string) $alert->severity) }}",
+  "severity": {!! json_encode($severityOut) !!},
   "status": "{{ $alert->state == 0 ? 'resolved' : 'firing' }}",
   "source": ["facilities"],
   "fingerprint": "facilities:device:{{ $alert->device_id }}:rule:{{ $alert->rule_id }}",

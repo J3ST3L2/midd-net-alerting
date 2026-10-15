@@ -132,6 +132,27 @@ class FacilitiesTests(unittest.TestCase):
     def test_resolved_without_prior_notification_is_silent(self):
         self.assertEqual(which(self.F, {"status": "resolved", "rule": "Facilities Power Voltage"}), [])
 
+    # ---- actionable gate: firing alerts with severity info (nothing anyone can act on) are skipped ----
+    def test_non_actionable_firing_alert_posts_and_emails_nothing(self):
+        for sev in ("info", "INFO", "AlertSeverity.INFO"):    # tolerate how Keep may render the severity
+            got = which(self.F, {"status": "firing", "rule": "Facilities Power Voltage", "severity": sev})
+            self.assertEqual(got, [], "severity %r -> %s" % (sev, got))
+
+    def test_actionable_firing_alert_still_posts_one_card_and_one_email(self):
+        for sev in ("critical", "warning", "AlertSeverity.CRITICAL"):
+            got = which(self.F, {"status": "firing", "rule": "Facilities Power Voltage", "severity": sev})
+            self.assertEqual(sorted(g.split("-")[0] for g in got), ["email", "slack"], "severity %r -> %s" % (sev, got))
+
+    def test_meter_down_stays_red_and_actionable(self):
+        got = which(self.F, {"status": "firing", "rule": "Facilities Meter Down", "severity": "critical"})
+        self.assertIn("slack-firing-facilities-red", got)
+        self.assertIn("email-firing-facilities", got)
+
+    def test_recovery_still_runs_even_though_recovery_severity_is_info(self):
+        got = which(self.F, {"status": "resolved", "rule": "Facilities Power Voltage", "severity": "info",
+                             "slack_timestamp_facilities_v1": "1.1", "emailed_facilities_v1": "1"})
+        self.assertEqual(got, ["email-resolved-facilities", "slack-resolved-update-facilities"])
+
 
 if __name__ == "__main__":
     unittest.main()
