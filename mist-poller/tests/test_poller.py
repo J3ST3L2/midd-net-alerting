@@ -103,8 +103,16 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(d.fingerprint, r.fingerprint)
         self.assertEqual((d.phase, r.phase), ("fire", "resolve"))
 
-    def test_arp_suppressed(self):
-        self.assertEqual(extract(alarm("a", "infra_arp_failure", switches=[SW1]), self.cfg, {}), [])
+    def test_dhcp_suppressed_arp_posted(self):
+        self.assertEqual(extract(alarm("a", "infra_dhcp_failure", switches=[SW1]), self.cfg, {}), [])
+        evs = extract(alarm("a", "infra_arp_failure", switches=[SW1]), self.cfg, {})
+        self.assertEqual([e.phase for e in evs], ["fire"])
+
+    def test_bgp_state_changed_info_is_posted(self):
+        evs = extract(alarm("a", "sw_bgp_neighbor_state_changed", severity="info", switches=[SW1]),
+                      self.cfg, {})
+        self.assertEqual(len(evs), 1)
+        self.assertEqual(evs[0].payload["labels"]["mist_category"], "infra")
 
     def test_severity_mapping(self):
         for sev, want in (("critical", "critical"), ("warn", "warning"), ("info", "low"), ("zzz", "warning")):
@@ -457,7 +465,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_suppressed_types_never_queue(self):
         p, mist, keep, clock = bootstrapped()
-        mist.alarms = [alarm("a%d" % i, "infra_arp_failure", ts=clock.t - 5, switches=[SW1])
+        mist.alarms = [alarm("a%d" % i, "infra_dhcp_failure", ts=clock.t - 5, switches=[SW1])
                        for i in range(50)]
         p.run_cycle()
         self.assertEqual(keep.posted, [])

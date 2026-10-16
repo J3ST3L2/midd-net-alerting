@@ -21,7 +21,8 @@ Runtime layout (nothing here is in Git):
 | Events with no recovery signal (`vc_*`, `rogue_ap`, ...) | posted, then auto-resolved after `AUTO_RESOLVE_MINUTES` |
 | Info-severity events with no recovery signal (AP/switch restarts) | not posted (`SUPPRESS_INFO_EVENTS`) |
 | Device-down alert still firing while Mist reports the device `connected` | self-corrected: resolved after two device-list refreshes `SELF_CORRECT_S` apart |
-| `infra_arp_*`, `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`) |
+| `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`); `infra_arp_*` is posted |
+| `sw_bgp_neighbor_state_changed` (info) | posted as a one-shot, auto-resolved (`POST_INFO_TYPES`) |
 
 Severity: `critical`->critical, `warn`->warning, `info`->low.
 Each alert carries `labels.mist_category` (`wifi` or `infra`); the Keep workflows route on it.
