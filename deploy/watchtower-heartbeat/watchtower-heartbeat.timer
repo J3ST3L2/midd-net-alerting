@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the MiddWatchtower heartbeat every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
