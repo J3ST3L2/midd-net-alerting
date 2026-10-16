@@ -45,8 +45,7 @@ class Config:
 
     dry_run: bool = True              # safe default: log, do not post to Keep
     suppress_types: frozenset = frozenset({
-        "infra_arp_failure", "infra_arp_success", "infra_dhcp_failure", "infra_dhcp_success",
-        "infra_dns_failure", "infra_dns_success"})
+        "infra_dhcp_failure", "infra_dhcp_success", "infra_dns_failure", "infra_dns_success"})
     auto_resolve_minutes: int = 30    # Mist events with no recovery signal
     suppress_info_events: bool = True  # drop info-severity events with no recovery (restarts)
     self_correct_s: int = 300         # device must look connected on refreshes this far apart
@@ -83,8 +82,8 @@ def load():
         max_pages=int(os.environ.get("MAX_PAGES", "20")),
         dry_run=_bool("DRY_RUN", "true"),
         suppress_types=_csv("SUPPRESS_TYPES",
-                         "infra_arp_failure,infra_arp_success,infra_dhcp_failure,"
-                         "infra_dhcp_success,infra_dns_failure,infra_dns_success"),
+                         "infra_dhcp_failure,infra_dhcp_success,"
+                         "infra_dns_failure,infra_dns_success"),
         auto_resolve_minutes=int(os.environ.get("AUTO_RESOLVE_MINUTES", "30")),
         suppress_info_events=_bool("SUPPRESS_INFO_EVENTS", "true"),
         self_correct_s=int(os.environ.get("SELF_CORRECT_S", "300")),

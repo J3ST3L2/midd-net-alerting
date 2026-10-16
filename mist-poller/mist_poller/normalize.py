@@ -69,6 +69,8 @@ for _f, _r, _c in (
 # Explicit routing overrides; everything else uses the device kind / keywords.
 WIFI_TYPES = {"rogue_ap"}
 INFRA_TYPES = {"loop_detected_by_ap"}   # an AP reports it, but it is a switch/L2 problem
+# Info-severity one-shot events that are still worth a card (not restarts): BGP session changes.
+POST_INFO_TYPES = {"sw_bgp_neighbor_state_changed"}
 _WIFI_WORDS = re.compile(r"(^|_)(wlan|ssid|radio|client|roam|auth|wifi|wireless)(_|$)")
 
 
@@ -258,7 +260,7 @@ def extract(alarm, cfg, sites, devices=None):
         ev_ts = last_seen
 
     severity = SEVERITY.get(str(alarm.get("severity", "")).lower(), "warning")
-    if oneshot and severity == "low" and cfg.suppress_info_events:
+    if oneshot and severity == "low" and cfg.suppress_info_events and typ not in POST_INFO_TYPES:
         return []      # e.g. AP/switch restarts: informational, nothing to act on
     site_id = alarm.get("site_id") or ""
     cat = category(typ, alarm)
