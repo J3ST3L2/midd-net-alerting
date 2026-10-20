@@ -21,7 +21,8 @@ Runtime layout (nothing here is in Git):
 | Events with no recovery signal (`vc_*`, `rogue_ap`, ...) | posted, then auto-resolved after `AUTO_RESOLVE_MINUTES` |
 | Info-severity events with no recovery signal (AP/switch restarts) | not posted (`SUPPRESS_INFO_EVENTS`) |
 | Device-down alert still firing while Mist reports the device `connected` | self-corrected: resolved after two device-list refreshes `SELF_CORRECT_S` apart |
-| `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`); `infra_arp_*` is posted |
+| `infra_dhcp_*`, `infra_dns_*` | suppressed (`SUPPRESS_TYPES`) |
+| `infra_arp_failure` / `infra_arp_success` | one card per site listing the failing APs (`mist:alarms:infra_arp_site:<site_id>`); the card is edited as APs join or recover and resolves when the last AP recovers. Per-AP ARP alerts opened before grouping keep their own lifecycle. |
 | `sw_bgp_neighbor_state_changed` (info) | posted as a one-shot, auto-resolved (`POST_INFO_TYPES`) |
 
 Severity: `critical`->critical, `warn`->warning, `info`->low.

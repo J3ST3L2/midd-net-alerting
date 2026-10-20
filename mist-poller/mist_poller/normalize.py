@@ -131,6 +131,35 @@ DEFAULT_REASONS = {
     "insufficient_coverage": "Not enough Wi-Fi signal coverage for the clients near this access point",
 }
 
+# ARP failures arrive in bursts (dozens of APs at once), so the poller posts one card per site
+# instead of one per AP. Fingerprints of the per-AP events start with ARP_FP_PREFIX.
+ARP_FP_PREFIX = "mist:alarms:infra_arp:"
+ARP_GROUP_FP = "mist:alarms:infra_arp_site:"
+ARP_NAMES_SHOWN = 12
+
+
+def arp_group_payload(tpl, members, fingerprint):
+    """One Keep payload for every AP currently failing ARP at a site.
+    `tpl` is any per-AP payload from that site; `members` maps device key -> device name."""
+    labels = dict(tpl["labels"])
+    names = sorted((str(n) for n in members.values()), key=str.lower)
+    n = len(names)
+    site = labels.get("mist_site_name") or "Unknown site"
+    shown = ", ".join(names[:ARP_NAMES_SHOWN])
+    if n > ARP_NAMES_SHOWN:
+        shown += " (+%d more)" % (n - ARP_NAMES_SHOWN)
+    device = "%s (%d AP%s)" % (site, n, "" if n == 1 else "s")
+    labels.update(
+        mist_event_type="infra_arp_failure", mist_state="open", mist_device=device,
+        mist_mac="", mist_ip="n/a", mist_model="n/a", mist_firmware="n/a", mist_last_seen="n/a",
+        mist_device_kind="", mist_alarm_count=str(n), mist_arp_count=str(n),
+        mist_reason="Failing ARP to the gateway: " + shown)
+    msg = "Mist infra_arp_failure on %s" % device
+    return {"name": "%s: infra_arp_failure" % site, "status": "firing", "severity": "warning",
+            "lastReceived": tpl["lastReceived"], "service": "network", "source": ["mist"],
+            "message": msg, "description": msg, "fingerprint": fingerprint, "labels": labels,
+            "device": device, "hostname": device, "mac": "", "location": site}
+
 
 def reason(alarm, event_type):
     """Why the alarm fired: Mist's own `reasons`, else a Marvis event name, else a default."""

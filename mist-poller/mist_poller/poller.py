@@ -6,7 +6,7 @@ import time
 
 from .keep import KeepError
 from .mist_api import MistError
-from .normalize import extract, resolved_payload
+from .normalize import ARP_FP_PREFIX, ARP_GROUP_FP, arp_group_payload, extract, resolved_payload
 
 log = logging.getLogger("mist_poller")
 SITES_REFRESH_S = 6 * 3600
@@ -103,11 +103,16 @@ class Poller:
     def _apply(self, events, now, silent, stats):
         st, ttl = self.state, self.cfg.auto_resolve_minutes * 60
         lookup_budget = self.cfg.reason_lookups_per_cycle if self.cfg.reason_lookup else 0
+        arp_sites = {}
         for ev in events:
             if st.seen(ev.alarm_id, ev.device_key, ev.phase):
                 continue
             st.mark_seen(ev.alarm_id, ev.device_key, ev.phase, now)
             row = st.alert(ev.fingerprint)
+            # A per-AP ARP alert posted before grouping existed still follows the normal lifecycle.
+            if ev.fingerprint.startswith(ARP_FP_PREFIX) and not (row and row["status"] in ("firing", "silent")):
+                self._track_arp(ev, arp_sites)
+                continue
 
             if ev.phase == "fire":
                 if row and row["status"] in ("firing", "silent"):
@@ -139,6 +144,8 @@ class Poller:
                 if row["status"] == "firing":
                     self._enqueue(ev.fingerprint, resolved_payload(firing, ev.ts), now, stats)
 
+        self._flush_arp(arp_sites, now, silent, stats)
+
         if silent:   # cold start: decide what to do with what is still open
             for row in st.alerts_with_status("silent"):
                 if self.cfg.bootstrap_post_open:
@@ -146,6 +153,56 @@ class Poller:
                     st.upsert_alert(row["fingerprint"], "firing", row["last_ts"], row["alarm_id"],
                                     row["alarm_ts"], row["auto_resolve_at"], payload, now)
                     self._enqueue(row["fingerprint"], payload, now, stats)
+
+    # ---- ARP grouping ----------------------------------------------------
+    def _track_arp(self, ev, touched):
+        """Record which APs at a site are failing ARP; the card is built once per cycle."""
+        st = self.state
+        last = st.get("arpts:" + ev.device_key)
+        if last is not None and ev.ts < int(last):
+            return                                   # older than what we already applied
+        st.set("arpts:" + ev.device_key, ev.ts)
+        labels = ev.payload["labels"]
+        site = labels.get("mist_site_id") or "unknown"
+        members = json.loads(st.get("arp:" + site) or "{}")
+        if ev.phase == "fire":
+            members[ev.device_key] = labels.get("mist_device") or ev.device_key
+        else:
+            members.pop(ev.device_key, None)
+        if members:
+            st.set("arp:" + site, json.dumps(members, sort_keys=True))
+        else:
+            st.delete("arp:" + site)
+        touched[site] = ev
+
+    def _flush_arp(self, touched, now, silent, stats):
+        st = self.state
+        for site, ev in touched.items():
+            members = json.loads(st.get("arp:" + site) or "{}")
+            fp = ARP_GROUP_FP + site
+            row = st.alert(fp)
+            active = row is not None and row["status"] in ("firing", "silent")
+            if members:
+                payload = arp_group_payload(ev.payload, members, fp)
+                if not active:
+                    st.upsert_alert(fp, "silent" if silent else "firing", ev.ts, ev.alarm_id,
+                                    ev.alarm_ts, None, payload, now)
+                    if not silent:
+                        self._enqueue(fp, payload, now, stats)
+                    continue
+                old = json.loads(row["payload"])["labels"]
+                if old.get("mist_reason") == payload["labels"]["mist_reason"]:
+                    continue                         # same APs: nothing to tell Slack
+                st.upsert_alert(fp, row["status"], ev.ts, row["alarm_id"], row["alarm_ts"],
+                                None, payload, now)
+                if row["status"] == "firing":
+                    self._enqueue(fp, dict(payload, labels=dict(payload["labels"], mist_refresh="true")),
+                                  now, stats)
+            elif active:
+                firing = json.loads(row["payload"])
+                st.upsert_alert(fp, "resolved", ev.ts, row["alarm_id"], row["alarm_ts"], None, firing, now)
+                if row["status"] == "firing":
+                    self._enqueue(fp, resolved_payload(firing, ev.ts), now, stats)
 
     def _auto_resolve(self, now, stats):
         for row in self.state.due_auto_resolves(now):
