@@ -471,5 +471,67 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(keep.posted, [])
 
 
+class ArpGroupingTests(unittest.TestCase):
+    NAMES = {AP1: "AP-ONE", AP2: "AP-TWO", "5c5b35000003": "AP-THREE"}
+
+    def fail(self, aid, macs, ts):
+        return alarm(aid, "infra_arp_failure", ts=ts, aps=macs, severity="warn",
+                     hostnames=[self.NAMES[m] for m in macs])
+
+    def ok(self, aid, macs, ts):
+        return alarm(aid, "infra_arp_success", ts=ts, aps=macs, severity="info",
+                     hostnames=[self.NAMES[m] for m in macs])
+
+    def test_burst_is_one_card_per_site(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.alarms = [self.fail("f1", [AP1, AP2, "5c5b35000003"], clock.t - 5)]
+        p.run_cycle()
+        self.assertEqual(len(keep.posted), 1)
+        card = keep.posted[0]
+        self.assertEqual(card["name"], "Davis Library: infra_arp_failure")
+        self.assertEqual(card["status"], "firing")
+        self.assertEqual(card["labels"]["mist_arp_count"], "3")
+        self.assertIn("AP-ONE, AP-THREE, AP-TWO", card["labels"]["mist_reason"])
+        self.assertEqual(card["labels"]["mist_device"], "Davis Library (3 APs)")
+
+    def test_new_ap_refreshes_the_same_card_and_same_set_is_quiet(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.alarms = [self.fail("f1", [AP1], clock.t - 5)]
+        p.run_cycle()
+        clock.t += 30
+        p.run_cycle()                                    # nothing new
+        self.assertEqual(len(keep.posted), 1)
+        mist.alarms.append(self.fail("f2", [AP2], clock.t - 5))
+        p.run_cycle()
+        self.assertEqual(len(keep.posted), 2)
+        self.assertEqual(keep.posted[1]["fingerprint"], keep.posted[0]["fingerprint"])
+        self.assertEqual(keep.posted[1]["labels"]["mist_refresh"], "true")
+        self.assertEqual(keep.posted[1]["labels"]["mist_arp_count"], "2")
+
+    def test_resolves_only_when_every_ap_recovers(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.alarms = [self.fail("f1", [AP1, AP2], clock.t - 20)]
+        p.run_cycle()
+        clock.t += 30
+        mist.alarms.append(self.ok("s1", [AP1], clock.t - 5))
+        p.run_cycle()                                    # AP2 still failing: card shrinks
+        self.assertEqual(keep.posted[-1]["status"], "firing")
+        self.assertEqual(keep.posted[-1]["labels"]["mist_arp_count"], "1")
+        clock.t += 30
+        mist.alarms.append(self.ok("s2", [AP2], clock.t - 5))
+        p.run_cycle()
+        self.assertEqual(keep.posted[-1]["status"], "resolved")
+        self.assertEqual(statuses(keep)[-1], ("infra_arp_failure", "resolved"))
+
+    def test_late_failure_does_not_resurrect_a_recovered_ap(self):
+        p, mist, keep, clock = bootstrapped()
+        mist.alarms = [self.ok("s1", [AP1], clock.t - 5)]
+        p.run_cycle()
+        clock.t += 30
+        mist.alarms.append(self.fail("f1", [AP1], clock.t - 60))   # older than the success
+        p.run_cycle()
+        self.assertEqual(keep.posted, [])
+
+
 if __name__ == "__main__":
     unittest.main()
