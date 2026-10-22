@@ -739,6 +739,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "No open alarms in the last 24 hours",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -936,6 +937,7 @@
             }
           },
           "min": 0,
+          "noValue": "No open alarms in the last 24 hours",
           "thresholds": {
             "mode": "absolute",
             "steps": [

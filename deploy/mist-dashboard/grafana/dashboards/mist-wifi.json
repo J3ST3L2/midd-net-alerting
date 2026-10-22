@@ -1133,6 +1133,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "noValue": "No access point dropped offline in the last 24 hours",
           "thresholds": {
             "mode": "absolute",
             "steps": [
