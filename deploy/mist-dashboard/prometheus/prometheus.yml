@@ -7,3 +7,8 @@ scrape_configs:
   - job_name: mist
     static_configs:
       - targets: ["exporter:9877"]
+
+  # Orb sensor data received by Telegraf (sensor pushes, not Mist or Aruba).
+  - job_name: orb
+    static_configs:
+      - targets: ["telegraf:9273"]

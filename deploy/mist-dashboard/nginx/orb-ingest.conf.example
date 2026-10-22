@@ -1,0 +1,20 @@
+# Orb sensor pushes -> Telegraf. Install as /etc/nginx/orb-ingest.conf (it is included inside the gravitron
+# HTTPS server by gravitron-dashboards.conf). Keep the real file out of Git: it holds the secret path.
+#
+#   TOKEN:  openssl rand -hex 24      (put it in both the location below and the Orb config's url=)
+#   ALLOW:  the address ranges the sensors sit in; everything else is refused.
+#
+# Orb's push has no documented authentication header, so the secret path plus the allow-list are the protection.
+
+location /orb-ingest/REPLACE_WITH_RANDOM_TOKEN {
+    allow 192.0.2.0/24;          # replace with the campus ranges the sensors use
+    deny all;
+
+    limit_except POST { deny all; }
+    client_max_body_size 20m;
+
+    proxy_pass http://127.0.0.1:7081/ingest;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 15s;
+}
