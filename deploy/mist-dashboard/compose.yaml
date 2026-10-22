@@ -54,6 +54,26 @@ services:
     networks:
       - backend
 
+  # Receives Orb sensor pushes via nginx (see README "Orb sensors") and exposes them to Prometheus.
+  telegraf:
+    image: telegraf:1.40.1
+    container_name: mist-telegraf
+    restart: unless-stopped
+    user: "65534:65534"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:7081:7081"            # nginx on the host forwards Orb pushes here
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    networks:
+      - backend
+
   prometheus:
     image: prom/prometheus:v3.13.4
     container_name: mist-prometheus

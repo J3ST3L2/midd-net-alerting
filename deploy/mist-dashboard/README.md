@@ -262,6 +262,50 @@ right now on both platforms (Mist counts a client seen in the last 30 minutes, `
 controllers' live tables). A device that roams between a Mist and an Aruba building inside that window can be
 counted once on each side, which is a rounding error at this scale.
 
+## Orb sensors (receiver)
+
+Orb sensors (orb.net, replacing the UXI sensors) can push their measurements to gravitron. Telegraf receives the
+pushes and Prometheus scrapes them, so Orb data lands next to the Mist and Aruba numbers.
+
+```
+Orb sensor --HTTPS POST--> nginx (/orb-ingest/<secret>) --> Telegraf :7081 --> Prometheus (job "orb") --> Grafana
+```
+
+**Turn it on (nothing is served until step 2).**
+
+1. Bring the receiver up: `sudo docker compose up -d` (adds the `telegraf` container; Prometheus gets an `orb` job).
+2. nginx: `sudo cp nginx/orb-ingest.conf.example /etc/nginx/orb-ingest.conf`, set the secret path
+   (`openssl rand -hex 24`) and the campus ranges the sensors use, then `sudo nginx -t && sudo systemctl reload nginx`.
+   The secret path and the allow-list are the only protection (Orb documents no push authentication), so keep the
+   file out of Git.
+3. In Orb Cloud (Orchestration > Configurations > the managed-devices configuration > Advanced) add a push
+   destination next to the existing `datasets.cloud_push`, then Save & Apply from the Advanced tab:
+
+```
+"datasets.push": ["scores_1m", "responsiveness_1s", "speed_results", "web_responsiveness_results",
+                  "wifi_link_1s", "system_telemetry_1m",
+                  "identifiable=true", "format=json",
+                  "url=https://gravitron.middlebury.edu/orb-ingest/<the secret>"]
+```
+
+`identifiable=true` is needed for the BSSID, which ties a sensor to a Mist AP. The nearby-AP scan is left out on
+purpose: it lists the SSIDs around a sensor, which can include personal hotspots.
+
+**What is kept.** Only the labels `orb_id`, `orb_name`, `bssid`, `network_name`, `network_type`, `web_url`,
+`measure_endpoint_name`, `channel_band`, `channel_width` and `phy_mode` become Prometheus labels, and
+`string_as_label = false` drops every other string. Sensor MACs, IP addresses, coordinates and the city never reach
+Prometheus, and nothing is written to disk or logged. A sensor that stops reporting disappears after 10 minutes.
+
+**Check it.** After an Orb has pushed:
+
+```bash
+sudo docker exec mist-prometheus wget -qO- http://telegraf:9273/metrics | grep -c '^wifi_link_1s'
+sudo docker logs mist-telegraf --tail 20
+```
+
+Metric names are `<dataset>_<field>` (for example `wifi_link_1s_rssi_avg`, `responsiveness_1s_packet_loss_pct`).
+The Orb dashboard is built from the real names once data arrives.
+
 ## Aruba controllers (Aruba Wireless dashboard)
 
 The exporter can read the Aruba side of the campus from the controllers' own REST API, so PantherNet adoption
