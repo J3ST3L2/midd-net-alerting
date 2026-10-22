@@ -119,6 +119,20 @@ def link_series(panels, title, link):
     next(p for p in panels if p["title"] == title)["fieldConfig"]["defaults"]["links"] = [link]
 
 
+def say_when_empty(panels, titles, text):
+    """What a panel says when its query returns nothing, instead of a bare 'No data'."""
+    found = set()
+    for p in panels:
+        if p.get("title") in titles and "fieldConfig" in p:
+            p["fieldConfig"]["defaults"]["noValue"] = text
+            found.add(p["title"])
+    assert found == set(titles), "no panel titled %s" % sorted(set(titles) - found)
+
+
+NO_ALARMS = "No open alarms in the last 24 hours"
+NOT_FOR_TYPE = "Not reported by this type of device"
+
+
 def link_columns(panels, title, links):
     """Click a cell in the named table to open another dashboard. links: {column: link}."""
     p = next(p for p in panels if p["title"] == title)
@@ -209,6 +223,7 @@ def overview():
     link_series(p, "Disconnected by site", SITE_FROM_SERIES)
     link_columns(p, "Disconnected now", {"Device": device_from_column("Device"), "Site": site_from_column("Site")})
     link_columns(p, "Open alarms (24 h)", {"Site": site_from_column("Site")})
+    say_when_empty(p, ("Open alarms (24 h)", "Alarms by severity (24 h window)"), NO_ALARMS)
     return dashboard("mist-overview", "Mist Overview", p, [SITE_VAR],
                      "Fleet health and alarms across the Juniper Mist org.")
 
@@ -466,6 +481,7 @@ def site_view():
               hide=("site", "group", "state"), order=["Severity", "Type", "Alarms"], sort="Alarms"),
     ]
     link_columns(p, "Devices", {"Device": device_from_column("Device")})
+    say_when_empty(p, ("Open alarms (24 h)",), NO_ALARMS)
     return dashboard("mist-site", "Mist Site", p,
                      [variable("site", "Site", "label_values(mist_device_up, site)", include_all=False)],
                      "One site: its devices, clients, load and alarms.")
@@ -510,6 +526,7 @@ def device_view():
     ]
     link_columns(p, "Identity", {"Site": _link("Open site",
                                                 '/d/mist-site?var-site=${__data.fields["Site"]:percentencode}')})
+    say_when_empty(p, ("Clients", "CPU", "Memory", "PoE draw"), NOT_FOR_TYPE)
     return dashboard("mist-device", "Mist Device", p,
                      [variable("device", "Device", "label_values(mist_device_up, name)", include_all=False)],
                      "One device: state, load, clients and history.")
@@ -594,6 +611,7 @@ def wifi_view():
     for title in ("APs behind coverage problems", "APs behind capacity problems", "APs that dropped offline (24 h)"):
         link_columns(p, title, {"AP": device_from_column("AP"), "Site": site_from_column("Site")})
     link_series(p, "Recently restarted APs", DEVICE_FROM_SERIES)
+    say_when_empty(p, ("APs that dropped offline (24 h)",), "No access point dropped offline in the last 24 hours")
     return dashboard("mist-wifi", "Mist Wifi Troubleshooting", p, [SITE_VAR],
                      "Where wifi is degraded: client experience by site, the APs behind it, and AP stability.")
 

@@ -125,6 +125,17 @@ class Dashboards(unittest.TestCase):
                      if p.get("fieldConfig", {}).get("defaults", {}).get("noValue") == "Loading history"}
             self.assertEqual(found, titles, name)
 
+    def test_panels_that_can_be_legitimately_empty_say_so(self):
+        dashboards = build.build()
+        wanted = {"mist-overview.json": {"Open alarms (24 h)", "Alarms by severity (24 h window)"},
+                  "mist-site.json": {"Open alarms (24 h)"},
+                  "mist-device.json": {"Clients", "CPU", "Memory", "PoE draw"},
+                  "mist-wifi.json": {"APs that dropped offline (24 h)"}}
+        for name, titles in wanted.items():
+            got = {p["title"] for p in dashboards[name]["panels"]
+                   if p.get("fieldConfig", {}).get("defaults", {}).get("noValue")}
+            self.assertTrue(titles <= got, (name, titles - got))
+
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
             boxes = [(p["gridPos"], p["title"]) for p in d["panels"]]
