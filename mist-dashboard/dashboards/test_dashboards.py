@@ -112,7 +112,8 @@ class Dashboards(unittest.TestCase):
         self.assertFalse(any('match="device"' in t["expr"] for p in panels for t in p["targets"]))
         # the other dashboards keep the usual 6 hour default
         others = [d["time"]["from"] for n, d in build.build().items()
-                  if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json", "orb-sensors.json")]
+                  if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json", "orb-sensors.json")
+                  and not n.endswith("-shared.json")]
         self.assertEqual(set(others), {"now-6h"})
 
     def test_history_dependent_boxes_say_loading_instead_of_no_data(self):
@@ -167,8 +168,38 @@ class Dashboards(unittest.TestCase):
     def test_orb_panels_say_what_they_are_waiting_for(self):
         for p in build.build()["orb-sensors.json"]["panels"]:
             if "fieldConfig" in p:
-                self.assertEqual(p["fieldConfig"]["defaults"].get("noValue"), "Waiting for the Orb sensors to push data",
-                                 p["title"])
+                self.assertEqual(p["fieldConfig"]["defaults"].get("noValue"), build.ORB_WAITING, p["title"])
+                self.assertLess(len(build.ORB_WAITING), 30)               # must fit a small stat box
+
+    def test_shared_copies_work_without_drop_downs_or_logins(self):
+        dashboards = build.build()
+        shared = {n: d for n, d in dashboards.items() if n.endswith("-shared.json")}
+        self.assertEqual(len(shared), 5)
+        for name, d in shared.items():
+            self.assertEqual(d["templating"]["list"], [], name)
+            self.assertEqual(d["tags"], ["shared"], name)               # not in the signed-in dashboard picker
+            self.assertEqual(d["links"], [], name)
+            self.assertTrue(d["title"].endswith("(shared)"), name)
+            for p in d["panels"]:
+                for target in p.get("targets", []):
+                    self.assertNotRegex(target["expr"], r"\$(site|type|orb|device)\b", "%s / %s" % (name, p["title"]))
+                fc = p.get("fieldConfig", {"defaults": {}, "overrides": []})
+                self.assertNotIn("links", fc["defaults"], p["title"])
+                for o in fc["overrides"]:
+                    self.assertTrue(all(x["id"] != "links" for x in o["properties"]), p["title"])
+
+    def test_shared_copy_shows_all_sites(self):
+        d = build.build()["mist-load-shared.json"]
+        exprs = " ".join(t["expr"] for p in d["panels"] for t in p.get("targets", []))
+        self.assertIn('site=~".*"', exprs)
+
+    def test_dashboards_with_drop_downs_each_have_a_shared_copy(self):
+        dashboards = build.build()
+        for name, d in dashboards.items():
+            if name.endswith("-shared.json") or name in ("mist-site.json", "mist-device.json"):
+                continue                                              # drill-downs need a chosen site or device
+            if d["templating"]["list"]:
+                self.assertIn(name.replace(".json", "-shared.json"), dashboards, name)
 
     def test_no_panel_overlap(self):
         for name, d in build.build().items():

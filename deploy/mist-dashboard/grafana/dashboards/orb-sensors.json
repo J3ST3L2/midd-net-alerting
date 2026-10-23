@@ -30,7 +30,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -91,7 +91,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -153,14 +153,14 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Sensors currently seeing more than 1% packet loss to the internet.",
+      "description": "Sensors currently seeing more than 1% packet loss to the internet. Blank until a sensor reports, so a missing sensor never reads as zero.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "decimals": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -207,7 +207,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(responsiveness_1s_packet_loss_pct{orb_name=~\"$orb\"} > 1) or vector(0)",
+          "expr": "count(responsiveness_1s_packet_loss_pct{orb_name=~\"$orb\"} > 1) or (0 * count(responsiveness_1s_packet_loss_pct{orb_name=~\"$orb\"}))",
           "format": "time_series",
           "instant": true,
           "legendFormat": "",
@@ -229,7 +229,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -290,7 +290,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -360,7 +360,7 @@
           },
           "max": 100,
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -439,7 +439,7 @@
           },
           "max": 100,
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -507,7 +507,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -585,7 +585,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -663,7 +663,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -731,7 +731,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -798,7 +798,7 @@
               "mode": "none"
             }
           },
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -866,7 +866,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -934,7 +934,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1012,7 +1012,7 @@
             }
           },
           "min": 0,
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1070,7 +1070,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "noValue": "Waiting for the Orb sensors to push data",
+          "noValue": "Waiting for Orb data",
           "thresholds": {
             "mode": "absolute",
             "steps": [

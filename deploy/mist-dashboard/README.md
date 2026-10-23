@@ -105,7 +105,15 @@ dashboards, no queries beyond that dashboard's panels). The links are served by 
 (`/mist-dashboard/public-dashboards/<token>`), rate limited per visitor. On a dashboard choose *Share > Share
 externally > Anyone with the link*; Grafana shows the finished link.
 
-Good candidates are the dashboards with no drop-downs or drill-downs (*PantherNet Adoption*, *Aruba Wireless*);
+**Share the "(shared)" copies, not the originals, for any dashboard that has a drop-down.** Grafana's public dashboards
+do not fill in drop-down values, so a query that says `site=~"$site"` asks for a site literally named `$site` and every
+panel reads "No data". Each dashboard with a Site, Type or Sensor drop-down therefore has a generated *(shared)* copy
+(Mist Overview, Mist Wireless, Mist Device Load, Mist Wifi Troubleshooting, Orb Sensors): all sites, no drop-downs,
+and no links to pages that need a login. The copies carry the tag `shared`, so they stay out of the dashboard picker on
+the signed-in pages. *PantherNet Adoption* and *Aruba Wireless* have no drop-downs and share as they are. *Mist Site*
+and *Mist Device* are drill-downs that need a chosen site or device and cannot be shared.
+
+Older note: Good candidates are the dashboards with no drop-downs or drill-downs (*PantherNet Adoption*, *Aruba Wireless*);
 public dashboards do not support Grafana variables, so the Site and Device links on the others do not work there.
 *Pause access* on the Shared dashboards page (Dashboards > Shared dashboards) cuts a link at once. The sharing
 settings live in Grafana's data volume, not in Git, so redo them after rebuilding that volume.
