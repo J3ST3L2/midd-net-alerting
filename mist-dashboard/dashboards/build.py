@@ -825,7 +825,7 @@ def pn_campus_view():
                      time_from="now-7d", tags=("mist", "aruba"))
 
 
-ORB_VAR = variable("orb", "Sensor", "label_values(scores_1m_orb_score, orb_name)")
+ORB_VAR = variable("orb", "Sensor", "label_values(scores_orb_score, orb_name)")
 ORB_WAITING = "Waiting for Orb data"
 ORB_NOTE = (" Each Orb sensor measures from the network edge and pushes its results every minute. "
             "Metric names are <dataset>_<field>, as Telegraf writes them.")
@@ -839,72 +839,75 @@ def orb_view():
         return "%s%s / 1000" % (m, o)
 
     p = [
-        stat("Sensors reporting", 0, 0, 5, "count(scores_1m_orb_score%s)" % o,
+        stat("Sensors reporting", 0, 0, 5, "count(count by (orb_name) (scores_orb_score%s))" % o,
              "Orb sensors that have sent a score recently. A sensor that stops reporting drops out after 10 minutes."
              + ORB_NOTE),
-        stat("Average Orb score", 5, 0, 5, "avg(scores_1m_orb_score%s)" % o,
+        stat("Average Orb score", 5, 0, 5, "avg(avg by (orb_name) (scores_orb_score%s))" % o,
              "Orb's overall experience score (0 to 100) averaged over the sensors shown: a blend of responsiveness, "
              "reliability and speed. Higher is better." + ORB_NOTE, thresholds=score_steps),
-        stat("Sensors losing packets", 10, 0, 5, "count(responsiveness_1s_packet_loss_pct%s > 1) or (0 * count(responsiveness_1s_packet_loss_pct%s))" % (o, o),
+        stat("Sensors losing packets", 10, 0, 5, "count(avg by (orb_name) (responsiveness_packet_loss_pct%s) > 1) or "
+"(0 * count(avg by (orb_name) (responsiveness_packet_loss_pct%s)))" % (o, o),
              "Sensors currently seeing more than 1% packet loss to the internet. Blank until a sensor reports, so a "
              "missing sensor never reads as zero.",
              thresholds=steps((GREEN, None), (AMBER, 1), (RED, 3))),
         stat("Median internet latency", 15, 0, 5,
-             "quantile(0.5, responsiveness_1s_latency_avg_us%s) / 1000" % o,
+             "quantile(0.5, avg by (orb_name) (responsiveness_latency_avg_us%s)) / 1000" % o,
              "Middle value of the round-trip time to the internet across the sensors shown.", unit="ms"),
-        stat("Data age", 20, 0, 4, "time() - max(timestamp(scores_1m_orb_score))",
+        stat("Data age", 20, 0, 4, "time() - max(timestamp(scores_orb_score))",
              "Seconds since the newest Orb result arrived.", unit="s",
              thresholds=steps((GREEN, None), (AMBER, 300), (RED, 900)), color_mode="background"),
 
-        bargauge("Orb score by sensor", 0, 4, 12, 9, "sort_desc(scores_1m_orb_score%s)" % o, "{{orb_name}}",
+        bargauge("Orb score by sensor", 0, 4, 12, 9, "sort_desc(avg by (orb_name) (scores_orb_score%s))" % o, "{{orb_name}}",
                  "The overall Orb score for each sensor right now (0 to 100). A short bar is a sensor with a poor "
                  "experience." + ORB_NOTE, thresholds=score_steps, max_=100),
-        timeseries("Orb score over time", 12, 4, 12, 9, [target("scores_1m_orb_score%s" % o, "{{orb_name}}")],
+        timeseries("Orb score over time", 12, 4, 12, 9, [target("avg by (orb_name) (scores_orb_score%s)" % o, "{{orb_name}}")],
                    "How each sensor's overall score moves through the day.", max_=100),
 
         timeseries("Latency: internet and building gateway", 0, 13, 12, 9,
-                   [target("avg by (orb_name) (%s)" % ms("responsiveness_1s_latency_avg_us"),
+                   [target("avg by (orb_name) (%s)" % ms("responsiveness_latency_avg_us"),
                            "{{orb_name}} internet"),
-                    target("avg by (orb_name) (%s)" % ms("responsiveness_1s_router_latency_avg_us"),
+                    target("avg by (orb_name) (%s)" % ms("responsiveness_router_latency_avg_us"),
                            "{{orb_name}} gateway", ref="B")],
                    "Round-trip time from each sensor to the internet and to its building gateway. If both rise "
                    "together the problem is local; if only the internet line rises it is upstream.", unit="ms"),
         timeseries("Packet loss: internet and building gateway", 12, 13, 12, 9,
-                   [target("avg by (orb_name) (responsiveness_1s_packet_loss_pct%s)" % o, "{{orb_name}} internet"),
-                    target("avg by (orb_name) (responsiveness_1s_router_packet_loss_pct%s)" % o,
+                   [target("avg by (orb_name) (responsiveness_packet_loss_pct%s)" % o, "{{orb_name}} internet"),
+                    target("avg by (orb_name) (responsiveness_router_packet_loss_pct%s)" % o,
                            "{{orb_name}} gateway", ref="B")],
                    "Share of probes that got no answer, to the internet and to the building gateway.",
                    unit="percent"),
 
         timeseries("Web response time (TTFB) by site", 0, 22, 12, 9,
-                   [target("avg by (web_url) (web_responsiveness_results_ttfb_us%s) / 1000" % o, "{{web_url}}")],
+                   [target("avg by (web_url) (web_responsiveness_ttfb_us%s) / 1000" % o, "{{web_url}}")],
                    "Time until the first byte comes back from each service people rely on, averaged over the "
                    "sensors shown.", unit="ms"),
         timeseries("DNS lookup time by site", 12, 22, 12, 9,
-                   [target("avg by (web_url) (web_responsiveness_results_dns_us%s) / 1000" % o, "{{web_url}}")],
+                   [target("avg by (web_url) (web_responsiveness_dns_us%s) / 1000" % o, "{{web_url}}")],
                    "How long the name lookup took for each service, averaged over the sensors shown.", unit="ms"),
 
         timeseries("Wi-Fi signal strength (RSSI)", 0, 31, 12, 9,
-                   [target("wifi_link_1s_rssi_avg%s" % o, "{{orb_name}}")],
+                   [target("avg by (orb_name) (wifi_link_rssi_avg%s)" % o, "{{orb_name}}")],
                    "Signal level each sensor sees from its access point. Closer to 0 is stronger; weaker than about "
                    "-70 dBm is where connections start to suffer. Wi-Fi sensors only.", unit="dBm", min_=None),
-        timeseries("Wi-Fi signal-to-noise (SNR)", 12, 31, 12, 9,
-                   [target("wifi_link_1s_snr_avg%s" % o, "{{orb_name}}")],
-                   "How far the signal sits above the background noise. Higher is better; under about 20 dB is "
-                   "marginal. Wi-Fi sensors only.", unit="dB"),
+        timeseries("Wi-Fi link speed (receive and transmit)", 12, 31, 12, 9,
+                   [target("avg by (orb_name) (wifi_link_rx_rate_mbps%s)" % o, "{{orb_name}} receive"),
+                    target("avg by (orb_name) (wifi_link_tx_rate_mbps%s)" % o, "{{orb_name}} transmit", ref="B")],
+                   "The data rate the sensor's Wi-Fi link negotiated with its access point. A sensor stuck at a low rate "
+                   "usually has a weak signal or interference. Wi-Fi sensors only. Signal-to-noise appears here once "
+                   "the sensors are allowed to scan (cap_net_admin).", unit="Mbits"),
 
         timeseries("Speed tests (download and upload)", 0, 40, 12, 9,
-                   [target("avg by (orb_name) (speed_results_download_kbps%s)" % o, "{{orb_name}} down"),
-                    target("avg by (orb_name) (speed_results_upload_kbps%s)" % o, "{{orb_name}} up", ref="B")],
+                   [target("avg by (orb_name) (speed_download_kbps%s)" % o, "{{orb_name}} down"),
+                    target("avg by (orb_name) (speed_upload_kbps%s)" % o, "{{orb_name}} up", ref="B")],
                    "Throughput from the hourly speed test. The line is flat between tests.", unit="Kbits"),
         timeseries("Sensor health: CPU", 12, 40, 12, 9,
-                   [target("system_telemetry_1m_cpu_avg_pct%s" % o, "{{orb_name}}")],
+                   [target("avg by (orb_name) (system_telemetry_cpu_avg_pct%s)" % o, "{{orb_name}}")],
                    "CPU load on each sensor itself. A sensor that is overloaded can mis-measure.", unit="percent"),
 
         table("Sensors", 0, 49, 24, 9,
-              [target("wifi_link_1s_rssi_avg%s" % o, fmt="table", instant=True),
-               target("scores_1m_orb_score%s" % o, fmt="table", instant=True, ref="B"),
-               target("responsiveness_1s_packet_loss_pct%s" % o, fmt="table", instant=True, ref="C")],
+              [target("wifi_link_rssi_avg%s" % o, fmt="table", instant=True),
+               target("scores_orb_score%s" % o, fmt="table", instant=True, ref="B"),
+               target("responsiveness_packet_loss_pct%s" % o, fmt="table", instant=True, ref="C")],
               "One line per sensor: the access point it is connected to (BSSID), its network, signal, overall score "
               "and packet loss.", merge=True,
               hide=("orb_id", "network_type", "channel_band", "channel_width", "phy_mode", "web_url",

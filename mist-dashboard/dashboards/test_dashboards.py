@@ -137,33 +137,41 @@ class Dashboards(unittest.TestCase):
                    if p.get("fieldConfig", {}).get("defaults", {}).get("noValue")}
             self.assertTrue(titles <= got, (name, titles - got))
 
-    # Fields Orb documents for each dataset (https://orb.net/docs/deploy-and-configure/datasets). Telegraf names the
-    # metrics <dataset>_<field>, so a typo here would be an empty panel.
+    # What Telegraf actually exposes for each Orb dataset: <dataset>_<field>, without the _1m / _1s interval and
+    # _results suffix of Orb's own dataset names. Seen live on gravitron on 2026-10-23, except speed (hourly, not seen
+    # yet; Orb documents download_kbps and upload_kbps).
     ORB_FIELDS = {
-        "scores_1m": {"orb_score", "responsiveness_score", "reliability_score", "speed_score", "lag_avg_us",
-                      "download_avg_kbps", "upload_avg_kbps"},
-        "responsiveness_1s": {"latency_avg_us", "jitter_avg_us", "packet_loss_pct", "lag_avg_us",
-                              "router_latency_avg_us", "router_jitter_avg_us", "router_packet_loss_pct"},
-        "speed_results": {"download_kbps", "upload_kbps"},
-        "web_responsiveness_results": {"ttfb_us", "dns_us"},
-        "wifi_link_1s": {"rssi_avg", "snr_avg", "noise_avg", "tx_rate_mbps", "rx_rate_mbps", "channel_number"},
-        "system_telemetry_1m": {"cpu_avg_pct", "mem_used_avg_bytes", "disk_used_avg_bytes"},
+        "scores": {"orb_score", "responsiveness_score", "reliability_score", "speed_score", "lag_avg_us",
+                   "download_avg_kbps", "upload_avg_kbps", "measured_ms", "unresponsive_ms"},
+        "responsiveness": {"latency_avg_us", "jitter_avg_us", "packet_loss_pct", "lag_avg_us", "router_latency_avg_us",
+                           "router_jitter_avg_us", "router_packet_loss_pct", "router_lag_avg_us"},
+        "speed": {"download_kbps", "upload_kbps"},
+        "web_responsiveness": {"ttfb_us", "dns_us", "sample_count"},
+        "wifi_link": {"rssi_avg", "tx_rate_mbps", "rx_rate_mbps", "channel_number", "frequency_mhz", "mcs", "nss"},
+        "system_telemetry": {"cpu_avg_pct", "mem_used_avg_bytes", "disk_used_avg_bytes", "orb_cpu_avg_pct"},
     }
 
-    def test_orb_dashboard_uses_only_documented_fields_and_labels(self):
+    def test_orb_dashboard_uses_only_real_metric_names_and_safe_labels(self):
         dash = build.build()["orb-sensors.json"]
         exprs = [t["expr"] for p in dash["panels"] for t in p.get("targets", [])]
         exprs += [v["query"]["query"] for v in dash["templating"]["list"]]
-        pattern = (r"\b(scores_1m|responsiveness_1s|speed_results|web_responsiveness_results|wifi_link_1s|"
-                   r"system_telemetry_1m)_([a-z0-9_]+)\b")
+        pattern = (r"\b(scores|responsiveness|speed|web_responsiveness|wifi_link|system_telemetry)_([a-z0-9_]+)\b")
         found = 0
         for e in exprs:
             for dataset, field in re.findall(pattern, e):
-                self.assertIn(field, self.ORB_FIELDS[dataset], "%s_%s is not a documented Orb field" % (dataset, field))
+                self.assertIn(field, self.ORB_FIELDS[dataset], "%s_%s is not a metric Telegraf exposes" % (dataset, field))
+                self.assertNotRegex(field, r"^(1m|1s)_", "interval suffix left in %s_%s" % (dataset, field))
                 found += 1
             for label in re.findall(r"\b(public_ip|private_ip|mac_address|latitude|longitude)\b", e):
                 self.fail("query uses an identifiable label: " + label)
         self.assertGreater(found, 15)
+
+    def test_orb_panels_group_by_sensor_so_several_access_points_do_not_double_count(self):
+        dash = build.build()["orb-sensors.json"]
+        by_title = {p["title"]: p["targets"][0]["expr"] for p in dash["panels"] if p.get("targets")}
+        self.assertIn("count by (orb_name)", by_title["Sensors reporting"])
+        self.assertIn("avg by (orb_name)", by_title["Average Orb score"])
+        self.assertIn("avg by (orb_name)", by_title["Orb score by sensor"])
 
     def test_orb_panels_say_what_they_are_waiting_for(self):
         for p in build.build()["orb-sensors.json"]["panels"]:
