@@ -1,0 +1,17 @@
+# Which networks may open the dashboards (everything on https://gravitron.middlebury.edu/mist-dashboard/).
+# Install as /etc/nginx/grafana-allow.conf. nginx will not start without that file, on purpose.
+#
+# Everyone else gets a 403, so it is safe to let anyone from these networks view without a login
+# (GRAFANA_ANONYMOUS=true in .env). The Orb sensors' push has its own list in /etc/nginx/orb-ingest.conf.
+
+allow 127.0.0.1;
+allow 140.233.0.0/16;        # campus, wired and staff networks
+
+# Add the networks your staff reach it from, for example:
+# allow <GlobalProtect VPN pool>;       # staff on the VPN
+# allow <managed-device Wi-Fi range>;   # VLAN 301: college-managed laptops and phones on PantherNet
+#
+# Left out on purpose: 10.0.0.0/8. It contains the personal-device Wi-Fi (10.22.0.0/16, VLAN 302), the residence
+# halls and the guest networks. Add a narrower range only if you want those users to see the dashboards.
+
+deny all;
