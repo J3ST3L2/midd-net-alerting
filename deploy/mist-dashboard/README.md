@@ -98,6 +98,31 @@ When Cloudflare Tunnel is added: point a hostname at `http://127.0.0.1:3000`, se
 `GRAFANA_ROOT_URL=https://<hostname>/`, remove the nginx file, and `sudo docker compose up -d`. Put it behind
 Cloudflare Access; Grafana's own login stays as a second layer.
 
+## Viewing without a login (campus networks only)
+
+Since the dashboards are internal, the simplest way to "share" one is to let anyone on the campus networks open the
+normal dashboards, read-only, with no login, and send them the address from the browser bar. The drop-downs and
+drill-down links all work, which Grafana's public links cannot do.
+
+- **Viewing** needs no account: visitors get Grafana's **Viewer** role, which cannot change anything.
+- **Administering still needs a login.** Staff with an account sign in at `/mist-dashboard/login`; nobody can edit a
+  dashboard in the screen anyway, because they are loaded from Git.
+- **Who can reach it** is decided by nginx, not Grafana. `/etc/nginx/grafana-allow.conf` lists the allowed networks
+  and everyone else gets a 403. nginx will not start without that file, so forgetting it can never leave the
+  dashboards open.
+
+To turn it on:
+
+1. Copy `nginx/grafana-allow.conf.example` to `/etc/nginx/grafana-allow.conf` and edit the ranges (add the VPN pools and
+   the managed-device Wi-Fi range if staff reach it from there). The personal-device Wi-Fi (`10.22.0.0/16`) and the
+   student networks are left out on purpose.
+2. Copy the new `nginx/gravitron-dashboards.conf` to `/etc/nginx/conf.d/`, then `sudo nginx -t && sudo systemctl reload nginx`.
+3. Set `GRAFANA_ANONYMOUS=true` in `.env` (and `GRAFANA_ALLOW_EMBEDDING=true` if signage shows Grafana in a frame),
+   then `sudo docker compose up -d` (it recreates Grafana only).
+
+Check it from a network that is **not** allowed (a phone on cellular): it should show a 403. From an allowed network the
+dashboards open without a sign-in prompt, and the user menu offers **Sign in** for staff.
+
 ## Sharing dashboards without logins
 
 Grafana's *Share > Share externally* makes a dashboard viewable by anyone holding its link (view only, no other
