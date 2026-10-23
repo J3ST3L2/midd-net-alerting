@@ -37,6 +37,8 @@ services:
       FALLBACK_PAGES_PER_SLICE: ${FALLBACK_PAGES_PER_SLICE:-16}
       FALLBACK_LOOKUPS_PER_SLICE: ${FALLBACK_LOOKUPS_PER_SLICE:-24}
       MC_EVENT_TYPE: ${MC_EVENT_TYPE:-CLIENT_AUTH_ASSOCIATION}
+      # Mist sites left out of every dashboard (comma-separated names); the test pod is always offline
+      EXCLUDE_SITES: ${EXCLUDE_SITES:-TestPOD}
       # Aruba controllers, read-only (see README "Aruba controllers"). Off while the list or the password is empty.
       ARUBA_CONTROLLERS: ${ARUBA_CONTROLLERS:-}
       ARUBA_USER: ${ARUBA_USER:-grafana-ro}
