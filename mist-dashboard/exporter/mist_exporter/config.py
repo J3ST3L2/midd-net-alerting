@@ -48,6 +48,8 @@ class Config:
     fallback_cache_path: str = "/state/pn-cache.sqlite3"
     fallback_cache_key_file: str = ""
     fallback_cache_ttl_h: int = 72
+    # Sites left out of every metric (the test pod is always offline and would skew the fleet numbers)
+    exclude_sites: tuple = ("TestPOD",)
     pn_ssid: str = "PantherNet"
     mc_ssid: str = "MiddleburyCollege"
     mc_event_type: str = "CLIENT_AUTH_ASSOCIATION"
@@ -92,6 +94,7 @@ def load():
         fallback_cache_path=env("FALLBACK_CACHE_PATH", "/state/pn-cache.sqlite3").strip(),
         fallback_cache_key_file=env("PN_CACHE_KEY_FILE", "").strip(),
         fallback_cache_ttl_h=int(env("FALLBACK_CACHE_TTL_H", "72")),
+        exclude_sites=_csv(env("EXCLUDE_SITES", "TestPOD")),
         pn_ssid=env("PN_SSID", "PantherNet").strip(),
         mc_ssid=env("MC_SSID", "MiddleburyCollege").strip(),
         mc_event_type=env("MC_EVENT_TYPE", "CLIENT_AUTH_ASSOCIATION").strip(),

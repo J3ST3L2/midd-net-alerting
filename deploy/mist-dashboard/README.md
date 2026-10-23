@@ -379,6 +379,19 @@ that cannot be reached keeps its last count for 3 poll intervals, then drops out
 connected right now, so it shows adoption (who is on which network) but not who failed first. *People on both
 networks* is the closest proxy.
 
+## Leaving a site out (the test pod)
+
+The test pod's devices are always offline, and its up/down changes would skew the fleet numbers. The exporter leaves
+every site named in `EXCLUDE_SITES` out of all of its metrics, so every dashboard, the shared copies included, drops
+it without any dashboard needing to know. The default is `TestPOD`; set `EXCLUDE_SITES=` (blank) to include it again,
+or a comma-separated list to leave out more sites (names match ignoring case). The exporter also stops spending Mist
+calls on those sites.
+
+- Prometheus keeps what it already stored for the site until retention ends, so a drop-down or a long
+  time range can still list `TestPOD` for the span of the selected time range. Live panels drop it within minutes.
+- The organisation-wide counts (operating systems per SSID, PantherNet by VLAN, and the PantherNet fallback) come
+  from Mist without a site breakdown, so a handful of test clients, if any, still count there.
+
 ## Known limits
 
 - **Open alarms** counts alarm records in the last 24 h whose `resolved_time`/`status` is unset.

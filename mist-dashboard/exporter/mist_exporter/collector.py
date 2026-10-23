@@ -71,11 +71,22 @@ class Collector:
         now = int(self.clock())
         return self.client.search_alarms(now - self.cfg.alarm_window_hours * 3600, now)
 
+    def _excluded_ids(self, sites):
+        """Ids of the sites named in cfg.exclude_sites (matched ignoring case)."""
+        names = {n.casefold() for n in self.cfg.exclude_sites}
+        return {sid for sid, name in sites.items() if str(name).casefold() in names}
+
+    def _active_site_ids(self):
+        """Sites that have clients and are not excluded: the only ones worth the per-site Mist calls."""
+        with self._lock:
+            gone = self._excluded_ids(self._data["sites"])
+            return [s["id"] for s in self._data["site_stats"]
+                    if s.get("id") and s.get("num_clients") and s["id"] not in gone]
+
     def _fetch_clients(self):
         """Per-AP counts (org-wide) plus band and SSID counts for each site that has clients."""
         win = self.cfg.client_window
-        with self._lock:
-            active = [s["id"] for s in self._data["site_stats"] if s.get("id") and s.get("num_clients")]
+        active = self._active_site_ids()
         return {"ap": self.client.client_counts("ap", win),
                 "sites": {sid: {d: self.client.client_counts(d, win, site_id=sid) for d in ("band", "ssid")}
                           for sid in active},
@@ -107,10 +118,8 @@ class Collector:
         One failing call (a metric a site does not support) is skipped, not fatal; the refresh only
         fails if every call does."""
         win = self.cfg.sle_window
-        with self._lock:
-            active = [s["id"] for s in self._data["site_stats"] if s.get("id") and s.get("num_clients")]
         out, ok, failed = {}, 0, 0
-        for sid in active:
+        for sid in self._active_site_ids():
             site = out.setdefault(sid, {"summary": {}, "aps": {}})
             for metric in SLE_METRICS:
                 try:
@@ -173,6 +182,16 @@ class Collector:
             site_stats, clients, sle = self._data["site_stats"], self._data["clients"], self._data["sle"]
             ok, errors, duration = dict(self._ok), dict(self._errors), dict(self._duration)
             aruba_data = self._data["aruba"]
+            gone = self._excluded_ids(sites)
+        if gone:
+            # Dropped here, once, so every metric (and every dashboard, shared copies included) leaves them out
+            names = {n.casefold() for n in self.cfg.exclude_sites}
+            devices = [d for d in devices if d.get("site_id") not in gone]
+            alarms = [a for a in alarms if a.get("site_id") not in gone]
+            site_stats = [s for s in site_stats
+                          if s.get("id") not in gone and str(s.get("name", "")).casefold() not in names]
+            clients = dict(clients, sites={k: v for k, v in clients["sites"].items() if k not in gone})
+            sle = {k: v for k, v in sle.items() if k not in gone}
         families = (device_families(devices, sites) + alarm_families(alarms, sites)
                     + wireless_families(devices, sites, site_stats, clients["ap"], clients["sites"])
                     + site_ap_families(site_stats) + sle_families(sites, sle) + self._fallback.families()

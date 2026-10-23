@@ -298,6 +298,63 @@ class CollectorBehavior(unittest.TestCase):
         self.assertFalse(self.c.healthy())
 
 
+class WithTestPod(FakeClient):
+    """The org plus a test pod whose devices are always offline (it would skew every fleet number)."""
+
+    def __init__(self):
+        super().__init__()
+        test_ap = dict(AP, mac="5c5b35ffff01", site_id="s3", name="ap-test-1", status="disconnected")
+        test_sw = dict(SWITCH, mac="5c5b35ffff02", site_id="s3", name="sw-test-1")
+        self.devices = [AP, test_ap, test_sw]
+        self.alarms = [{"site_id": "s3", "severity": "critical", "type": "device_down", "group": "infrastructure"},
+                       {"site_id": "s1", "severity": "warn", "type": "device_down", "group": "infrastructure"}]
+
+    def list_sites(self):
+        return dict(SITES, s3="TestPOD")
+
+    def list_site_stats(self):
+        return super().list_site_stats() + [{"id": "s3", "name": "TestPOD", "num_clients": 5, "num_ap": 2,
+                                             "num_ap_connected": 0, "latlng": {"lat": 44.0, "lng": -73.1}}]
+
+
+class TestPodIsLeftOut(unittest.TestCase):
+    def render(self, **cfg):
+        client = WithTestPod()
+        c = Collector(Config(devices_interval=60, **cfg), client, Clock())
+        c.run_due()
+        return c.render(), client
+
+    def test_left_out_of_every_metric_by_default(self):
+        text, _ = self.render()
+        self.assertNotIn("TestPOD", text)
+        self.assertNotIn("ap-test-1", text)
+        self.assertNotIn("sw-test-1", text)
+        self.assertIn('site="Davis Library"', text)                    # real sites are untouched
+
+    def test_no_mist_calls_are_spent_on_it(self):
+        _, client = self.render()
+        self.assertNotIn("s3", {c[2] for c in client.client_calls})
+        self.assertNotIn("s3", {c[1] for c in client.sle_calls})
+
+    def test_alarms_of_other_sites_still_count(self):
+        text, _ = self.render()
+        self.assertIn('mist_alarms{group="infrastructure",severity="warn",site="Davis Library"', text)
+        self.assertNotIn('severity="critical"', text)
+
+    def test_name_match_ignores_case_and_can_be_changed_or_switched_off(self):
+        self.assertNotIn("TestPOD", self.render(exclude_sites=("testpod",))[0])
+        self.assertIn('site="TestPOD"', self.render(exclude_sites=())[0])
+        self.assertIn('site="Davis Library"', self.render(exclude_sites=("Atwater",))[0])
+        self.assertIn('site="TestPOD"', self.render(exclude_sites=("Atwater",))[0])
+
+    def test_excluded_by_default_in_config_and_compose(self):
+        self.assertEqual(Config().exclude_sites, ("TestPOD",))
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "deploy", "mist-dashboard", "compose.yaml")
+        with open(path, encoding="utf-8") as f:
+            compose = f.read()
+        self.assertIn("EXCLUDE_SITES: ${EXCLUDE_SITES:-TestPOD}", compose)
+
+
 class HttpEndpoints(unittest.TestCase):
     def test_metrics_healthz_and_404(self):
         collector = Collector(Config(devices_interval=60), FakeClient(), Clock())
