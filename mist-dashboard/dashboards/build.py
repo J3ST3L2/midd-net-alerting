@@ -827,6 +827,9 @@ def pn_campus_view():
 
 ORB_VAR = variable("orb", "Sensor", "label_values(scores_orb_score, orb_name)")
 ORB_WAITING = "Waiting for Orb data"
+# The three table queries carry different extra labels (channel, band, ...), which stops Grafana joining them into one
+# row per sensor. Averaging each over the same three labels gives them identical keys.
+ORB_ROW = "avg by (orb_name, bssid, network_name) (%s)"
 ORB_NOTE = (" Each Orb sensor measures from the network edge and pushes its results every minute. "
             "Metric names are <dataset>_<field>, as Telegraf writes them.")
 
@@ -905,9 +908,9 @@ def orb_view():
                    "CPU load on each sensor itself. A sensor that is overloaded can mis-measure.", unit="percent"),
 
         table("Sensors", 0, 49, 24, 9,
-              [target("wifi_link_rssi_avg%s" % o, fmt="table", instant=True),
-               target("scores_orb_score%s" % o, fmt="table", instant=True, ref="B"),
-               target("responsiveness_packet_loss_pct%s" % o, fmt="table", instant=True, ref="C")],
+              [target(ORB_ROW % ("wifi_link_rssi_avg" + o), fmt="table", instant=True),
+               target(ORB_ROW % ("scores_orb_score" + o), fmt="table", instant=True, ref="B"),
+               target(ORB_ROW % ("responsiveness_packet_loss_pct" + o), fmt="table", instant=True, ref="C")],
               "One line per sensor: the access point it is connected to (BSSID), its network, signal, overall score "
               "and packet loss.", merge=True,
               hide=("orb_id", "network_type", "channel_band", "channel_width", "phy_mode", "web_url",

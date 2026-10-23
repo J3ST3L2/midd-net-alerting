@@ -166,6 +166,12 @@ class Dashboards(unittest.TestCase):
                 self.fail("query uses an identifiable label: " + label)
         self.assertGreater(found, 15)
 
+    def test_orb_sensor_table_queries_share_labels_so_each_sensor_is_one_row(self):
+        dash = build.build()["orb-sensors.json"]
+        table = next(p for p in dash["panels"] if p["title"] == "Sensors")
+        for tgt in table["targets"]:
+            self.assertTrue(tgt["expr"].startswith("avg by (orb_name, bssid, network_name) ("), tgt["expr"])
+
     def test_orb_panels_group_by_sensor_so_several_access_points_do_not_double_count(self):
         dash = build.build()["orb-sensors.json"]
         by_title = {p["title"]: p["targets"][0]["expr"] for p in dash["panels"] if p.get("targets")}
