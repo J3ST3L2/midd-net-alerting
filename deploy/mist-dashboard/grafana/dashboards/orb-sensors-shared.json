@@ -1105,7 +1105,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "wifi_link_rssi_avg{orb_name=~\".*\"}",
+          "expr": "avg by (orb_name, bssid, network_name) (wifi_link_rssi_avg{orb_name=~\".*\"})",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -1116,7 +1116,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "scores_orb_score{orb_name=~\".*\"}",
+          "expr": "avg by (orb_name, bssid, network_name) (scores_orb_score{orb_name=~\".*\"})",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -1127,7 +1127,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "responsiveness_packet_loss_pct{orb_name=~\".*\"}",
+          "expr": "avg by (orb_name, bssid, network_name) (responsiveness_packet_loss_pct{orb_name=~\".*\"})",
           "format": "table",
           "instant": true,
           "legendFormat": "",
