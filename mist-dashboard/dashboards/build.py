@@ -7,6 +7,7 @@
 Output goes to deploy/mist-dashboard/grafana/dashboards/ and is loaded by Grafana's file
 provisioning, so Git stays the source of truth (UI edits are not persisted).
 """
+import copy
 import json
 import os
 import sys
@@ -919,11 +920,45 @@ def orb_view():
                      time_from="now-24h", tags=("mist", "orb"))
 
 
+SHARED_FILTERS = {"$site": ".*", "$type": ".*", "$orb": ".*"}
+
+
+def shared_copy(d):
+    """A variable-free copy of a dashboard that works as a public (no-login) link.
+
+    Grafana's public dashboards do not fill in drop-down values, so a query that says site=~"$site" asks for a site
+    literally named "$site" and every panel reads "No data". The copy shows everything (each drop-down = All),
+    has no drop-downs, and drops the drill-down links and the dashboard picker, which lead to pages that need a
+    login. It carries the tag "shared" only, so it stays out of the dashboard picker on the signed-in pages."""
+    d = copy.deepcopy(d)
+    d["uid"] += "-shared"
+    d["title"] += " (shared)"
+    d["tags"] = ["shared"]
+    d["description"] = (d.get("description", "") + " Shared copy for no-login links: all sites, no drop-downs.").strip()
+    d["templating"] = {"list": []}
+    d["links"] = []
+    for p in d["panels"]:
+        for t in p.get("targets", []):
+            for var, value in SHARED_FILTERS.items():
+                t["expr"] = t["expr"].replace(var, value)
+        fc = p.get("fieldConfig")
+        if fc:
+            fc["defaults"].pop("links", None)
+            for o in fc["overrides"]:
+                o["properties"] = [x for x in o["properties"] if x["id"] != "links"]
+            fc["overrides"] = [o for o in fc["overrides"] if o["properties"]]
+    return d
+
+
 def build():
     return {"mist-overview.json": overview(), "mist-wireless.json": wireless(), "mist-load.json": load(),
             "mist-site.json": site_view(), "mist-device.json": device_view(), "mist-wifi.json": wifi_view(),
             "aruba-wireless.json": aruba_view(), "pn-adoption.json": pn_campus_view(),
-            "orb-sensors.json": orb_view()}
+            "orb-sensors.json": orb_view(),
+            # No-login copies of the dashboards that have drop-downs (see shared_copy)
+            "mist-overview-shared.json": shared_copy(overview()), "mist-wireless-shared.json": shared_copy(wireless()),
+            "mist-load-shared.json": shared_copy(load()), "mist-wifi-shared.json": shared_copy(wifi_view()),
+            "orb-sensors-shared.json": shared_copy(orb_view())}
 
 
 def render(d):
