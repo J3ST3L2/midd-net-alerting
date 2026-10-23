@@ -112,7 +112,7 @@ class Dashboards(unittest.TestCase):
         self.assertFalse(any('match="device"' in t["expr"] for p in panels for t in p["targets"]))
         # the other dashboards keep the usual 6 hour default
         others = [d["time"]["from"] for n, d in build.build().items()
-                  if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json")]
+                  if n not in ("mist-wireless.json", "aruba-wireless.json", "pn-adoption.json", "orb-sensors.json")]
         self.assertEqual(set(others), {"now-6h"})
 
     def test_history_dependent_boxes_say_loading_instead_of_no_data(self):
@@ -135,6 +135,40 @@ class Dashboards(unittest.TestCase):
             got = {p["title"] for p in dashboards[name]["panels"]
                    if p.get("fieldConfig", {}).get("defaults", {}).get("noValue")}
             self.assertTrue(titles <= got, (name, titles - got))
+
+    # Fields Orb documents for each dataset (https://orb.net/docs/deploy-and-configure/datasets). Telegraf names the
+    # metrics <dataset>_<field>, so a typo here would be an empty panel.
+    ORB_FIELDS = {
+        "scores_1m": {"orb_score", "responsiveness_score", "reliability_score", "speed_score", "lag_avg_us",
+                      "download_avg_kbps", "upload_avg_kbps"},
+        "responsiveness_1s": {"latency_avg_us", "jitter_avg_us", "packet_loss_pct", "lag_avg_us",
+                              "router_latency_avg_us", "router_jitter_avg_us", "router_packet_loss_pct"},
+        "speed_results": {"download_kbps", "upload_kbps"},
+        "web_responsiveness_results": {"ttfb_us", "dns_us"},
+        "wifi_link_1s": {"rssi_avg", "snr_avg", "noise_avg", "tx_rate_mbps", "rx_rate_mbps", "channel_number"},
+        "system_telemetry_1m": {"cpu_avg_pct", "mem_used_avg_bytes", "disk_used_avg_bytes"},
+    }
+
+    def test_orb_dashboard_uses_only_documented_fields_and_labels(self):
+        dash = build.build()["orb-sensors.json"]
+        exprs = [t["expr"] for p in dash["panels"] for t in p.get("targets", [])]
+        exprs += [v["query"]["query"] for v in dash["templating"]["list"]]
+        pattern = (r"\b(scores_1m|responsiveness_1s|speed_results|web_responsiveness_results|wifi_link_1s|"
+                   r"system_telemetry_1m)_([a-z0-9_]+)\b")
+        found = 0
+        for e in exprs:
+            for dataset, field in re.findall(pattern, e):
+                self.assertIn(field, self.ORB_FIELDS[dataset], "%s_%s is not a documented Orb field" % (dataset, field))
+                found += 1
+            for label in re.findall(r"\b(public_ip|private_ip|mac_address|latitude|longitude)\b", e):
+                self.fail("query uses an identifiable label: " + label)
+        self.assertGreater(found, 15)
+
+    def test_orb_panels_say_what_they_are_waiting_for(self):
+        for p in build.build()["orb-sensors.json"]["panels"]:
+            if "fieldConfig" in p:
+                self.assertEqual(p["fieldConfig"]["defaults"].get("noValue"), "Waiting for the Orb sensors to push data",
+                                 p["title"])
 
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
