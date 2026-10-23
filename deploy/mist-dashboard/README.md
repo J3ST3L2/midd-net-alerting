@@ -25,6 +25,9 @@ Mist API <-- exporter (polls, caches) <-- Prometheus (30s scrape, 180d) <-- Graf
     sign-in problem numbers. Start here for "how far along is PantherNet?".
   - *Aruba Wireless*: the Aruba side of PantherNet adoption, read from the Aruba controllers: devices and
     PantherNet share, people on both networks, roles, device types, bands, and controller health.
+  - *Orb Sensors*: per-sensor Orb score, latency and loss to the internet and the building gateway, web response
+    (TTFB and DNS) for the services people use, Wi-Fi signal and SNR, speed tests and sensor health. Fills in once
+    the sensors push to the receiver (see "Orb sensors (receiver)").
   - *Mist Site* and *Mist Device*: drill-downs reached by clicking a site or device anywhere.
 - Only Grafana publishes a port, and only on loopback. Exporter and Prometheus are on a private
   Docker network.
