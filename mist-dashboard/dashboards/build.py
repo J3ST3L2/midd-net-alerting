@@ -825,7 +825,7 @@ def pn_campus_view():
 
 
 ORB_VAR = variable("orb", "Sensor", "label_values(scores_1m_orb_score, orb_name)")
-ORB_WAITING = "Waiting for the Orb sensors to push data"
+ORB_WAITING = "Waiting for Orb data"
 ORB_NOTE = (" Each Orb sensor measures from the network edge and pushes its results every minute. "
             "Metric names are <dataset>_<field>, as Telegraf writes them.")
 
@@ -844,8 +844,9 @@ def orb_view():
         stat("Average Orb score", 5, 0, 5, "avg(scores_1m_orb_score%s)" % o,
              "Orb's overall experience score (0 to 100) averaged over the sensors shown: a blend of responsiveness, "
              "reliability and speed. Higher is better." + ORB_NOTE, thresholds=score_steps),
-        stat("Sensors losing packets", 10, 0, 5, "count(responsiveness_1s_packet_loss_pct%s > 1) or vector(0)" % o,
-             "Sensors currently seeing more than 1% packet loss to the internet.",
+        stat("Sensors losing packets", 10, 0, 5, "count(responsiveness_1s_packet_loss_pct%s > 1) or (0 * count(responsiveness_1s_packet_loss_pct%s))" % (o, o),
+             "Sensors currently seeing more than 1% packet loss to the internet. Blank until a sensor reports, so a "
+             "missing sensor never reads as zero.",
              thresholds=steps((GREEN, None), (AMBER, 1), (RED, 3))),
         stat("Median internet latency", 15, 0, 5,
              "quantile(0.5, responsiveness_1s_latency_avg_us%s) / 1000" % o,

@@ -167,8 +167,8 @@ class Dashboards(unittest.TestCase):
     def test_orb_panels_say_what_they_are_waiting_for(self):
         for p in build.build()["orb-sensors.json"]["panels"]:
             if "fieldConfig" in p:
-                self.assertEqual(p["fieldConfig"]["defaults"].get("noValue"), "Waiting for the Orb sensors to push data",
-                                 p["title"])
+                self.assertEqual(p["fieldConfig"]["defaults"].get("noValue"), build.ORB_WAITING, p["title"])
+                self.assertLess(len(build.ORB_WAITING), 30)               # must fit a small stat box
 
     def test_no_panel_overlap(self):
         for name, d in build.build().items():
